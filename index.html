@@ -711,6 +711,12 @@ body.gdragging{cursor:grabbing; user-select:none; -webkit-user-select:none}
 .backbar{margin:-4px 0 6px; font-size:.82rem}
 .backbar .link{color:var(--muted); text-decoration:none}
 .backbar .link:hover{color:var(--ink); text-decoration:underline}
+.dgsel{border:0; background:transparent; color:var(--muted); font:inherit; font-size:.78rem; cursor:pointer; padding:0 2px; margin-right:8px}
+.dgsel:hover,.dgsel:focus{color:var(--ink)}
+.agh{display:flex; gap:8px; align-items:baseline; padding:7px 8px 2px; font-weight:600; font-size:.82rem; border-top:1px solid var(--rule)}
+.agh:first-child{border-top:0}
+.agh .link{font-weight:600}
+.agh .k{font-weight:400; color:var(--muted); font-size:.75rem}
 </style>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
 <script src="firebase-config.js"></script>
@@ -1446,8 +1452,24 @@ SPECIAL.prio={web:function(b,fk){var a=allActions().filter(function(x){return x.
       +'<form class="padd" data-prio="1"><input class="in" type="text" data-k="prio|add" autocomplete="off" enterkeyhint="done" placeholder="Add a priority" aria-label="Add a priority"><button class="btn">Add</button></form>',
       a.length>3?a.length+' set; three or fewer keeps them meaningful':'','<button class="mini" data-go="actions">All actions</button>','',fk)},
   model:function(b){return {t:b.t,kind:'table',min:1,cols:[{label:'',w:.15,type:'check'},{label:'Priority',w:2},{label:'Who',w:.7},{label:'Due',w:.7}],rows:allActions().filter(function(x){return x.pri&&!x.done}).sort(byDue).map(function(x){return [false,x.t,x.who||'',fmtL(x.due)]})}}};
-SPECIAL.openacts={web:function(b,fk){var a=allActions().filter(function(x){return !x.done}).sort(byDue),n=a.length;
-    return box(b.t,n?'<ul class="list due">'+a.slice(0,12).map(function(x){return actLi(x,{pre:'oa',proj:1})}).join('')+'</ul>'+(n>12?'<p class="empty">and '+(n-12)+' more on the Actions page</p>':''):'<p class="empty">No open actions.</p>',b.hint,'<button class="mini" data-go="actions">All actions</button>','',fk)},
+/* dashboard Actions: a plain list, or grouped by project, who or due date (remembered on this device) */
+function actGroupsOf(list,g){var t=today(),wd=new Date(t+'T00:00:00').getDay(),endW=addDays(t,(7-wd)%7),endN=addDays(endW,7),out=[],idx={};
+  var key=g==='project'?function(a){return store.projects[a.project]?a.project:''}:g==='person'?function(a){return String(a.who||'').trim()}:function(a){return !a.due?'5':a.due<t?'0':a.due===t?'1':a.due<=endW?'2':a.due<=endN?'3':'4'};
+  list.forEach(function(a){var k=key(a);if(!(k in idx)){idx[k]=out.length;out.push({k:k,items:[]})}out[idx[k]].items.push(a)});
+  var DN=['Overdue','Today','Later this week','Next week','Later','No due date'],ord=sorted('projects').map(function(x){return x.id});
+  out.forEach(function(gr){gr.label=g==='project'?(gr.k?(store.projects[gr.k].name||'Untitled project'):'No project'):g==='person'?(gr.k||'Not assigned'):DN[+gr.k]});
+  out.sort(function(x,y){if(g==='due')return x.k<y.k?-1:1;if(!x.k!==!y.k)return x.k?-1:1;if(g==='project')return ord.indexOf(x.k)-ord.indexOf(y.k);return x.label.localeCompare(y.label)});
+  return out}
+var dgroup=(function(){try{return localStorage.getItem('lw.dgroup')||''}catch(e){return ''}})();
+SPECIAL.openacts={web:function(b,fk){var a=allActions().filter(function(x){return !x.done}).sort(byDue),n=a.length,g=dgroup,cap=g?40:12,shown=a.slice(0,cap),body;
+    if(!n)body='<p class="empty">No open actions.</p>';
+    else if(!g)body='<ul class="list due">'+shown.map(function(x){return actLi(x,{pre:'oa',proj:1})}).join('')+'</ul>';
+    else body=actGroupsOf(shown,g).map(function(gr){var late=gr.items.filter(isLate).length;
+      return '<div class="agh">'+(g==='project'&&gr.k?'<button class="link" data-go="project" data-id="'+gr.k+'">'+esc(gr.label)+'</button>':esc(gr.label))+'<span class="k">'+gr.items.length+(late&&g!=='due'?', '+late+' overdue':'')+'</span></div>'
+        +'<ul class="list due">'+gr.items.map(function(x){return actLi(x,{pre:'oa',proj:g!=='project'})}).join('')+'</ul>'}).join('');
+    if(n>cap)body+='<p class="empty">and '+(n-cap)+' more on the Actions page</p>';
+    var sel='<select class="dgsel nop" data-dgroup="1" aria-label="Group actions">'+opts([['','No grouping'],['project','By project'],['person','By who'],['due','By due date']],g)+'</select>';
+    return box(b.t,body,b.hint,sel+'<button class="mini" data-go="actions">All actions</button>','',fk)},
   model:function(b){var a=allActions().filter(function(x){return !x.done});return {t:b.t,kind:'table',cols:[{label:'',w:.15,type:'check'},{label:'Action',w:2},{label:'Type',w:.7},{label:'Who',w:.7},{label:'Due',w:.7}],rows:a.map(function(x){return [false,(x.pri?'\u2605 ':'')+x.t,KINDN[x.kind]||'',x.who||'',fmtL(x.due)]})}}};
 /* a project's actions: everything in the one Actions list that belongs to it, from any source */
 function projActs(id){var key=function(x){return x.due||'9999'};return allActions().filter(function(a){return a.project===id&&!a.done}).sort(function(x,y){return key(x)<key(y)?-1:key(x)>key(y)?1:0})}
@@ -2342,6 +2364,7 @@ document.addEventListener('change',function(e){
   if(d.dayjump){if(isDate(el.value))go('today',el.value);return}
   if(d.startpage){try{localStorage.setItem('lw.start',el.value)}catch(err){}toast('This device will open there next time');return}
   if(d.restore){restoreFile(el);return}
+  if(d.dgroup){dgroup=el.value;try{localStorage.setItem('lw.dgroup',dgroup)}catch(err){}render();return}
   if(d.capnew){var ct=el.value;el.value='';if(!ct)return;closeSheet();var ci2=newRecord(ct,'','');go('record',ci2);render('records|'+ci2+'|title');return}
   if(d.newrec){var nrt=el.value;el.value='';if(!nrt)return;var nrp=d.folder?internalProject(d.folder):d.project;var nri=newRecord(nrt,nrp,d.person);go('record',nri);render('records|'+nri+'|title');return}
   if(d['new']){var nv=el.value;el.value='';if(!nv)return;
