@@ -652,6 +652,35 @@ body{align-content:start}
   .tr{grid-template-columns:var(--cols)}
   :root{--ctl:0px}
 }
+/* ---- tidy-ups ---- */
+.box p.empty,.box .empty{margin:0; padding:6px 8px 7px}
+#rail button.new{color:var(--muted); font-size:.78rem}
+#rail button.new:hover{color:var(--ink)}
+#rail button.railmore{font-size:inherit; color:var(--muted)}
+#rail button.railmore::before{content:none}
+#rail button.railmore::after{content:"\203A"; margin-left:auto; font-size:1rem; line-height:1; transition:transform .15s}
+#rail button.railmore[aria-expanded="true"]::after{transform:rotate(90deg)}
+.head h1.hname{flex:1 1 280px; min-width:0; display:flex; align-items:baseline; gap:6px}
+.hin{all:unset; flex:1; min-width:0; font:inherit; color:var(--ink); border-bottom:1px solid transparent; text-overflow:ellipsis}
+.hin:hover{border-bottom-color:var(--rule)}
+.hin:focus{border-bottom-color:var(--ink)}
+.hin::placeholder{color:var(--muted)}
+.cap:not(#capsheet .cap){border:1px solid var(--line)}
+.cap:focus-within{border-color:var(--ink)}
+.tr.blank .ck input{visibility:hidden}
+.dshow.ph{color:var(--muted)}
+.dwrap input.empty::-webkit-calendar-picker-indicator{opacity:0}
+.dwrap:hover input.empty::-webkit-calendar-picker-indicator,.dwrap input.empty:focus::-webkit-calendar-picker-indicator{opacity:.6}
+.newrec{border:1px solid var(--line); background:var(--sheet); color:inherit; border-radius:3px; padding:4px 8px; font:inherit; font-size:.82rem; cursor:pointer}
+.newrec:hover{border-color:var(--ink)}
+.kdtog{display:none}
+@media screen and (max-width:600px){
+  .tl{scroll-snap-type:x mandatory}
+  .tl > div{flex:0 0 50% !important; scroll-snap-align:start}
+  .tlw:not(.kdopen) .kdadd{display:none}
+  .kdtog{display:inline-block; margin:2px 0 8px}
+  .head [data-act="edit"]{display:none !important}
+}
 </style>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
 <script src="firebase-config.js"></script>
@@ -831,9 +860,10 @@ function isFolded(fk){return !!fk&&(ui.fold[fk]===1||(ui.fold[fk]==null&&!!DEFAU
 function box(title,inner,hint,extra,h,fk){var folded=isFolded(fk);
   return '<section class="box'+(folded?' folded':'')+'"><div class="bt">'+(fk?'<button class="fold" data-act="fold" data-fk="'+esc(fk)+'" aria-expanded="'+(!folded)+'" title="'+(folded?'Show':'Hide')+' this section"><b>'+esc(title)+'</b></button>':'<b>'+esc(title)+'</b>')
     +(hint?'<span>'+esc(hint)+'</span>':'')+(extra&&!folded?'<span class="r">'+extra+'</span>':'')+'</div>'+(folded?'':(h==='scroll'?'<div class="ov">'+inner+'</div>':inner))+'</section>'}
+function nameIn(kind,id,ph,label){var k=kind+'|'+id+'|name';return '<input class="hin" data-b="'+k+'" data-k="'+k+'" data-rr="1" value="'+esc(store[kind][id].name||'')+'" placeholder="'+esc(ph)+'" aria-label="'+esc(label)+'" autocomplete="off">'}
 function hfields(kind,id,items){return '<div class="hf" style="grid-template-columns:'+items.map(function(x){return 'minmax(0,'+(x[2]||1)+'fr)'}).join(' ')+'">'+items.map(function(x){
   var k=kind+'|'+id+'|'+x[0],a=' data-b="'+k+'" data-k="'+k+'" data-rr="1"',v=get(store[kind][id],x[0]);
-  return '<label>'+esc(x[1])+(x[3]==='select'?'<select'+a+'>'+opts(typeof x[4]==='function'?x[4]():x[4],v)+'</select>':(x[3]==='date'?'<span class="dwrap"><input'+a+(v?'':' class="empty"')+' type="date" value="'+esc(v)+'"><span class="dshow" aria-hidden="true">'+esc(fmtS(v))+'</span></span>':'<input'+a+' type="'+(x[3]||'text')+'" value="'+esc(v)+'">'))+'</label>'}).join('')+'</div>'}
+  return '<label>'+esc(x[1])+(x[3]==='select'?'<select'+a+'>'+opts(typeof x[4]==='function'?x[4]():x[4],v)+'</select>':(x[3]==='date'?'<span class="dwrap"><input'+a+(v?'':' class="empty"')+' type="date" value="'+esc(v)+'"><span class="dshow'+(v?'':' ph')+'" aria-hidden="true">'+(v?esc(fmtS(v)):'Add date')+'</span></span>':'<input'+a+' type="'+(x[3]||'text')+'" value="'+esc(v)+'">'))+'</label>'}).join('')+'</div>'}
 /* photos and files: the file lives in the artifact's asset store, the list of ids lives in the document */
 var TYPES={png:'image/png',jpg:'image/jpeg',jpeg:'image/jpeg',gif:'image/gif',webp:'image/webp',svg:'image/svg+xml',mp4:'video/mp4',webm:'video/webm',pdf:'application/pdf',csv:'text/csv',md:'text/markdown',json:'application/json',txt:'text/plain'};
 var isImg=function(f){return /^image\//.test(f.type||'')};
@@ -999,10 +1029,16 @@ function internalProject(name){var n=String(name||'').trim().toLowerCase();if(!n
 function projOrder(){var s=projSplit();return s.ext.concat(s.int)}
 function peopleOpts(){return [['','None']].concat(sorted('people').map(function(x){return [x.id,x.d.name||'Unnamed']}))}
 var colsOf=function(b,doc){return b.weeks?weekCols((doc||{}).start,b.weeks.first,b.weeks.label):(b.cols||[])};
+function foldInfo(doc,p,b){var v=get(doc,p);
+  if(b.kind==='table'||b.kind==='gantt'||b.kind==='files'){var n=Array.isArray(v)?v.filter(function(r){return !blank(r)}).length:0;return n?n+(b.kind==='files'?(n===1?' file':' files'):(n===1?' row':' rows')):'Empty'}
+  if(b.kind==='kv'){var m=(b.items||[]).filter(function(i){var x=v&&v[i.k];return x!=null&&x!==''}).length;return m?m+' of '+(b.items||[]).length+' filled':'Empty'}
+  if(b.kind==='area'||b.kind==='rich')return plain(v)?'Has notes':'Empty';
+  return ''}
 function rBox(kind,id,base,b){var p=(b.abs?'':base)+b.k,doc=store[kind][id],fk=(kind==='single'?id:kind)+':'+p;
+  if(b.kind!=='special'&&isFolded(fk)){var fi=foldInfo(doc,p,b);if(fi){var b2={};for(var z in b)b2[z]=b[z];b2.hint=fi;b=b2}}
   if(b.kind==='special')return SPECIAL[b.sp]?SPECIAL[b.sp].web(b,fk,kind,id):'';
   if(b.kind==='area')return box(b.t,f(kind,id,p,{type:'area',rows:b.rows||3,label:b.t}),b.hint,'',b.h,fk);
-  if(b.kind==='rich')return '<div style="--minh:'+(b.minh||160)+'px">'+box(b.t,rich(kind,id,p,b.t),b.hint,'',b.h,fk)+'</div>';
+  if(b.kind==='rich')return '<div style="--minh:'+(kind==='records'?(b.minh||160):Math.min(b.minh||160,220))+'px">'+box(b.t,rich(kind,id,p,b.t),b.hint,'',b.h,fk)+'</div>';
   if(b.kind==='kv')return box(b.t,lrows(kind,id,p,b.items,b.lw),b.hint,'',b.h,fk);
   if(b.kind==='gantt')return gBox(kind,id,p,b,fk);
   if(b.kind==='files')return box(b.t,filesBox(kind,id,p),b.hint,'',b.h,fk);
@@ -1199,8 +1235,7 @@ function recordList(filter,emptyMsg){
   return '<ul class="list">'+recs.map(function(x){var r=x.d,p=store.projects[r.project],e=store.people[r.person],sum=recSummary(r);
     return '<li><span class="d">'+fmtL(r.date)+'</span><button class="link" data-go="record" data-id="'+x.id+'">'+esc(r.title||'Untitled')+'</button><span class="k">'+esc(formDef(r.type).name)+'</span>'
       +(sum?'<span>'+esc(sum)+'</span>':'')+'<span class="sp"></span><span class="k">'+esc([p&&p.name,e&&e.name].filter(Boolean).join(', '))+'</span></li>'}).join('')+'</ul>'}
-function newRecordCtl(project,person,folder){return '<select data-ui="rtype" aria-label="Record type" style="border:1px solid var(--line);background:transparent;border-radius:3px;padding:5px 6px">'+opts([['','Choose a type']].concat(formOpts()),ui.rtype)+'</select>'
-  +'<button class="btn" data-act="newrec" data-project="'+(project||'')+'" data-person="'+(person||'')+'" data-folder="'+esc(folder||'')+'">New record</button>'}
+function newRecordCtl(project,person,folder){return '<select class="newrec" data-newrec="1" data-project="'+(project||'')+'" data-person="'+(person||'')+'" data-folder="'+esc(folder||'')+'" aria-label="New record">'+opts([['','New record\u2026']].concat(formOpts()),'')+'</select>'}
 var V={};
 var SPECIAL={
   timeline:{web:function(b,fk){var ms=timeline(),kd=keyDates(),t=today();
@@ -1211,9 +1246,9 @@ var SPECIAL={
               return '<li class="'+(x.done?'done ':'')+(past?'past':'')+'"><span class="d">'+esc(fmtS(x.d))+'</span>'+(x.kind!=='fin'?'<span class="dia" aria-hidden="true">\u25C6</span>':'')
                 +(x.pid?'<button class="kdt" data-go="project" data-id="'+x.pid+'" title="'+esc(x.proj)+'">'+esc(x.t)+' <span class="k">'+esc(x.proj)+'</span></button>':'<span class="kdt">'+esc(x.t)+'</span><button class="kdx" data-act="kddel" data-i="'+x.i+'" aria-label="Remove '+esc(x.t)+'">\u00D7</button>')+'</li>'}).join('')
             +(its.length>7?'<li><button class="mini" data-go="gsched">and '+(its.length-7)+' more</button></li>':'')+'</ul>':'<p class="kde">No key dates</p>')+'</div>'};
-      return '<div class="tlw"><div class="tl">'+ms.map(col).join('')+'</div>'
+      return '<div class="tlw'+(ui.kdOpen?' kdopen':'')+'"><div class="tl">'+ms.map(col).join('')+'</div>'
         +'<form class="kdadd nop" data-kd="1"><input class="in" type="text" name="kt" data-k="kd|t" data-kdt="1" autocomplete="off" enterkeyhint="done" placeholder="Add a key date, for example Model review 20/10" aria-label="Key date">'
-        +'<select class="in" name="kp" data-ui="kdp" aria-label="Project">'+opts(IBP(),ui.kdp||'')+'</select><input class="in" type="date" name="kd" aria-label="Date"><button class="btn">Add</button><span class="capprev" aria-live="polite"></span></form></div>'},
+        +'<select class="in" name="kp" data-ui="kdp" aria-label="Project">'+opts(IBP(),ui.kdp||'')+'</select><span class="dwrap"><input class="in empty" type="date" name="kd" aria-label="Date" data-kdd="1"><span class="dshow ph" aria-hidden="true">Date</span></span><button class="btn">Add</button><span class="capprev" aria-live="polite"></span></form><button class="mini kdtog nop" data-act="kdtog">'+(ui.kdOpen?'Close':'+ Key date')+'</button></div>'},
     model:function(b){var ms=timeline(),kd=keyDates();return {t:b.t,kind:'table',min:1,cols:ms.map(function(m){return {label:m.name,w:1}}),rows:[ms.map(function(m){return kd.filter(function(x){return x.d.slice(0,7)===m.key}).map(function(x){return {t:fmtS(x.d)+'  '+x.t+(x.proj?' ('+x.proj+')':''),s:x.done?'sub':''}})})]}}},
   projects:{web:function(b,fk){var pr=projOrder(),C='minmax(150px,1.1fr) 1.2fr 1.2fr 1.2fr 46px';
       return box(b.t,'<div class="scroll"><div class="wide stack">'+(pr.length?'':'<p class="empty">No projects yet. Add your first one below.</p>')+'<div class="tr th" style="--cols:'+C+'"><div>Project</div><div>Focus</div><div>Lookahead</div><div>Notes</div><div></div></div>'+pr.map(function(x,i){var ru=rollup(x.id),st=x.d.status;
@@ -1256,6 +1291,7 @@ var plain=function(h){return String(h||'').replace(/<(br|\/div|\/p|\/li)[^>]*>/g
 
 /* ---- this device ---- */
 var DEV=(function(){try{var v=localStorage.getItem('lw.dev');if(!v){v=newId();localStorage.setItem('lw.dev',v)}return v}catch(e){return 'x'}})();
+var narrow=function(){try{return matchMedia('(max-width:600px)').matches}catch(e){return false}};
 var DEVNAME=(function(){var coarse=!!(window.matchMedia&&matchMedia('(pointer:coarse)').matches),w=Math.min(screen.width||0,screen.height||0);return !coarse?'computer':w&&w<600?'phone':'iPad'})();
 var STARTS=[['dash','Dashboard'],['dash-ink','Dashboard, ready to handwrite'],['week','This week'],['last','Wherever I left off']];
 function startPref(){try{var v=localStorage.getItem('lw.start');if(v==='today')v='dash';if(v==='today-ink')v='dash-ink';return v||(DEVNAME==='iPad'?'dash-ink':'dash')}catch(e){return 'dash'}}
@@ -1301,7 +1337,7 @@ function capture(raw){var c=parseCap(raw),p=store.projects[c.p];
     toast('Added to the inbox'+(p?', for '+(p.name||'the project'):''),function(){var j=items.indexOf(it);if(j>=0){items.splice(j,1);save('single','inbox');render()}})}}
 function capPreview(raw){if(!raw.trim())return '';var c=parseCap(raw),p=store.projects[c.p];
   return c.due||c.who?'Creates an action'+(p?' on '+esc(p.name):'')+(c.who?' for '+esc(c.who):'')+(c.due?', due '+esc(fmtD(c.due)):''):'Goes to the inbox'+(p?', for '+esc(p.name):'')}
-function capForm(k,ph){return '<form class="cap" data-form="capture"><input type="text" name="text" data-k="'+k+'" data-cap="1" autocomplete="off" enterkeyhint="done" placeholder="'+esc(ph||'Add an item. Include a name or date to create an action.')+'" aria-label="Capture"><button class="btn pri">Add</button><span class="capprev" aria-live="polite"></span></form>'}
+function capForm(k,ph){return '<form class="cap" data-form="capture"><input type="text" name="text" data-k="'+k+'" data-cap="1" autocomplete="off" enterkeyhint="done" placeholder="'+esc(ph||(narrow()?'Add an item or action':'Add an item. Include a name or date to create an action.'))+'" aria-label="Capture"><button class="btn pri">Add</button><span class="capprev" aria-live="polite"></span></form>'}
 var KINDN={'':'',follow:'Follow-up',rem:'Reminder',change:'Request'},KOPTS=[['','Action'],['follow','Follow-up'],['rem','Reminder'],['change','Request']];
 function mergeLists(){var d=store.single.dash;if(!d)return;var L=single('actions'),moved=0;if(!Array.isArray(L.list))L.list=[];
   [['follow','follow'],['rem','rem'],['changes','change']].forEach(function(z){var arr=d[z[0]];if(Array.isArray(arr)&&arr.length){arr.forEach(function(r){if(r&&r.t){L.list.push({t:r.t,kind:z[1],done:!!r.done});moved++}});d[z[0]]=[]}});
@@ -1378,7 +1414,7 @@ SPECIAL.pacts={web:function(b,fk,kind,id){if(kind!=='projects'||!id)return '';va
         return '<li>'+(x.bind?'<span class="ck"><input type="checkbox" data-l="'+x.bind+'" data-k="pa2|'+x.bind+'" data-rr="1" aria-label="Done: '+esc(x.t)+'"></span>':'<span class="ck nb"></span>')+(x.kind?'<span class="tag">'+esc(KINDN[x.kind])+'</span>':'')
           +'<span class="grow">'+(x.own?esc(x.t):'<button class="link"'+goAttr(x.go||{v:'actions'})+'>'+esc(x.t)+'</button>')+(x.own?'':' <span class="k">'+esc(x.src||'')+'</span>')+'</span>'
           +(x.who?'<span class="k">'+esc(x.who)+'</span>':'')+(x.due?'<span class="d'+(late?' late-t':'')+'">'+(x.due===t?'Today':fmtS(x.due))+'</span>':'')+'</li>'}).join('')+'</ul>':'<p class="empty">No open actions on this project.</p>';
-    return box(b.t,list+'<form class="padd" data-padd="'+id+'"><input class="in" type="text" data-k="'+k+'" autocomplete="off" enterkeyhint="done" placeholder="Add an action. A name or a day sets who and when." aria-label="Add an action to this project"><button class="btn">Add</button></form>',
+    return box(b.t,list+'<form class="padd" data-padd="'+id+'"><input class="in" type="text" data-k="'+k+'" autocomplete="off" enterkeyhint="done" placeholder="'+(narrow()?'Add an action':'Add an action. A name or a day sets who and when.')+'" aria-label="Add an action to this project"><button class="btn">Add</button></form>',
       a.length?a.length+' open':'','<button class="mini" data-go="actions">All actions</button>','',fk)},
   model:function(b){var id=ui.v==='project'?ui.id:null,a=id?projActs(id):[];return {t:b.t,kind:'table',min:1,cols:[{label:'',w:.15,type:'check'},{label:'Action',w:2},{label:'Who',w:.7},{label:'Due',w:.7},{label:'From',w:1}],rows:a.map(function(x){return [false,x.t,x.who||'',fmtL(x.due),x.own?'':x.src||'']})}}};
 SPECIAL.done={web:function(b,fk){var mon=mondayOf(),it=doneIn(mon,addDays(mon,6)).slice().reverse();
@@ -1595,9 +1631,9 @@ V.project=function(){
   var tab=function(k,l){return '<button data-tab="'+k+'" aria-pressed="'+(ui.tab===k)+'">'+l+'</button>'};
   var ctabs=pages('project');if(ui.tab.indexOf('c_')===0&&!ctabs.some(function(p){return 'c_'+p.id===ui.tab}))ui.tab='sheet';
   var lid=ui.tab==='sheet'||ui.tab==='wiki'||ui.tab.indexOf('c_')===0?ui.tab:null;
-  var h='<div class="head"><h1>'+mark(d.status)+' '+esc(d.name||'Untitled project')+'</h1><span class="sp"></span>'+updated(d)+pdfBtn+(lid&&!ui.edit?editBtn(lid)+(ui.tab==='sheet'?'<button class="btn" data-act="edit" data-lid="own:projects:'+id+'">Add sections to this project only</button>':''):'')
+  var h='<div class="head"><h1 class="hname">'+mark(d.status)+' '+nameIn('projects',id,'Untitled project','Project name')+'</h1><span class="sp"></span>'+updated(d)+pdfBtn+(lid&&!ui.edit?editBtn(lid)+(ui.tab==='sheet'?'<button class="btn" data-act="edit" data-lid="own:projects:'+id+'">Add sections to this project only</button>':''):'')
     +'<button class="btn" data-act="archive" data-kind="projects">'+(d.archived?'Restore from archive':'Archive')+'</button><button class="btn danger" data-act="del" data-kind="projects">'+(ui.confirm==='del'?'Confirm delete':'Delete')+'</button></div>'
-    +hfields('projects',id,[['name','Project',1.4],['client','Client',1.1],['phase','Phase',.9,'select',PHASES],['status','Status',.8,'select',STATUS],['scope','Type',.7,'select',SCOPES]])
+    +hfields('projects',id,[['client','Client',1.4],['phase','Phase',.9,'select',PHASES],['status','Status',.8,'select',STATUS],['scope','Type',.7,'select',SCOPES]])
     +'<div class="tabs" style="margin-bottom:12px">'+tab('sheet','Project sheet')+tab('wiki','Project wiki')+tab('checks','Checklists'+(copen?' '+copen+' open':''))+tab('records','Records'+(recs?' '+recs:''))+ctabs.map(function(p){return tab('c_'+p.id,esc(p.name||'Untitled'))}).join('')+'</div>';
   if(ui.edit&&lid)return h+editor(ui.edit);
   if(ui.tab==='wiki')return h+rRows('projects',id,'wiki.',getLayout('wiki').rows);
@@ -1618,9 +1654,9 @@ V.person=function(){
   var id=ui.id,d=store.people[id];if(!d){ui.v='dash';return V.dash()}
   var ctabs=pages('person');if(ui.tab!=='sheet'&&!ctabs.some(function(p){return 'c_'+p.id===ui.tab}))ui.tab='sheet';
   var lid=ui.tab==='sheet'?'person':ui.tab;
-  var h='<div class="head"><h1>'+esc(d.name||'Unnamed')+'</h1><span class="sp"></span>'+updated(d)+pdfBtn+(ui.edit?'':editBtn(lid)+(ui.tab==='sheet'?'<button class="btn" data-act="edit" data-lid="own:people:'+id+'">Add sections to this person only</button>':''))+'<button class="btn" data-act="newrec" data-type="scheck" data-person="'+id+'">New check-in</button>'
+  var h='<div class="head"><h1 class="hname">'+nameIn('people',id,'Unnamed','Name')+'</h1><span class="sp"></span>'+updated(d)+pdfBtn+(ui.edit?'':editBtn(lid)+(ui.tab==='sheet'?'<button class="btn" data-act="edit" data-lid="own:people:'+id+'">Add sections to this person only</button>':''))+'<button class="btn" data-act="newrec" data-type="scheck" data-person="'+id+'">New check-in</button>'
     +'<button class="btn" data-act="archive" data-kind="people">'+(d.archived?'Restore from archive':'Archive')+'</button><button class="btn danger" data-act="del" data-kind="people">'+(ui.confirm==='del'?'Confirm delete':'Delete')+'</button></div>'
-    +hfields('people',id,[['name','Name',1.3],['role','Role',1.1],['started','Started',.8,'date']])
+    +hfields('people',id,[['role','Role',1.3],['started','Started',.8,'date']])
     +(ctabs.length?'<div class="tabs" style="margin-bottom:12px"><button data-tab="sheet" aria-pressed="'+(ui.tab==='sheet')+'">Person sheet</button>'+ctabs.map(function(p){return '<button data-tab="c_'+p.id+'" aria-pressed="'+(ui.tab==='c_'+p.id)+'">'+esc(p.name||'Untitled')+'</button>'}).join('')+'</div>':'');
   if(ui.edit)return h+editor(ui.edit);
   if(ui.tab!=='sheet')return h+(rRows('people',id,'x.'+ui.tab.slice(2)+'.',getLayout(ui.tab).rows)||'<p class="empty">This tab has no sections yet. Choose Edit layout to add some.</p>');
@@ -2129,10 +2165,10 @@ function render(focusKey){
     +'<select class="newsel" data-new="1" data-k="newsel" aria-label="Create something new"><option value="">New\u2026</option><option value="action">Action</option><option value="project">Project</option><option value="person">Person</option><optgroup label="Record">'+formOpts().map(function(o){return '<option value="r:'+esc(o[0])+'">'+esc(o[1])+'</option>'}).join('')+'</optgroup></select>'
     +R('dash','Dashboard')+R('inbox','Inbox',nIn)+R('actions','Actions',openA)+R('week','Week',0,ui.v==='week'||ui.v==='today'?' aria-current="page"':'')+R('gsched','Schedule')+R('records','Records',nRec,ui.v==='records'||ui.v==='record'?' aria-current="page"':'')+R('bd','Business development')+R('team','Team',0,/^(team|office|people)$/.test(ui.v)?' aria-current="page"':'')
     +'<div class="sec"><button class="secb" data-go="projects">Projects</button></div>'+(function(){var sp=projSplit(),pb=function(x){return '<button data-go="project" data-id="'+x.id+'"'+cur('project',x.id)+'>'+mark(x.d.status)+'<span style="overflow:hidden;text-overflow:ellipsis">'+esc(x.d.name||'Untitled project')+'</span></button>'};
-      return sp.ext.map(pb).join('')+(sp.int.length?'<div class="subsec">Internal</div>'+sp.int.map(pb).join(''):'')})()+'<button class="new" data-act="new" data-kind="projects">New project</button>'
-    +'<div class="sec"><button class="secb" data-go="team">People</button></div>'+sorted('people').map(function(x){return '<button data-go="person" data-id="'+x.id+'"'+cur('person',x.id)+'>'+esc(x.d.name||'Unnamed')+'</button>'}).join('')+'<button class="new" data-act="new" data-kind="people">New person</button>'
+      return sp.ext.map(pb).join('')+(sp.int.length?'<div class="subsec">Internal</div>'+sp.int.map(pb).join(''):'')})()+'<button class="new" data-act="new" data-kind="projects">+ New project</button>'
+    +'<div class="sec"><button class="secb" data-go="team">People</button></div>'+sorted('people').map(function(x){return '<button data-go="person" data-id="'+x.id+'"'+cur('person',x.id)+'>'+esc(x.d.name||'Unnamed')+'</button>'}).join('')+'<button class="new" data-act="new" data-kind="people">+ New person</button>'
     +(pages('page').length?'<div class="sec">Your pages</div>'+pages('page').map(function(p){return '<button data-go="page" data-id="'+p.id+'"'+cur('page',p.id)+'>'+esc(p.name||'Untitled page')+'</button>'}).join(''):'')
-    +'<div class="sec"><button class="secb railmore" data-act="railmore" aria-expanded="'+!!moreOpen+'">More</button></div>'
+    +'<button class="railmore" data-act="railmore" aria-expanded="'+!!moreOpen+'" style="margin-top:10px">More</button>'
     +(moreOpen?R('reset','Monday planning')+R('dump','Friday review')+R('sched','Resourcing')+R('archive','Archive'):'')
     +R('settings','Settings')+'<div id="status"></div>';
   status();tabbar();
@@ -2140,9 +2176,10 @@ function render(focusKey){
   view.innerHTML=mode==='loading'?'<p class="empty">Loading your workspace.</p>':V[ui.v]();
   var hd=view.querySelector('.head');
   if(hd){var hb=[].filter.call(hd.children,function(c){return c.matches('button.btn,label.btn')}),main=function(b){var t=b.dataset.act;return t==='pdf'||t==='snap'||(t==='newrec'&&b.dataset.type==='scheck')};
-    var rest=hb.filter(function(b){return !main(b)});
-    if(hb.length>1&&rest.length){var menu=hb.length>3,wrapA=document.createElement('div');wrapA.className='acts'+(menu?' menu':'');hd.insertBefore(wrapA,rest[0]);rest.forEach(function(b){wrapA.appendChild(b)});
-      var mb=document.createElement('button');mb.className='btn morebtn'+(menu?' menu':'');mb.dataset.act='more';mb.setAttribute('aria-expanded','false');mb.textContent='More';hd.insertBefore(mb,wrapA)}}
+    var rest=hb.filter(function(b){return !main(b)});if(narrow())rest=rest.filter(function(b){if(b.dataset.act==='edit'){b.remove();return false}return true});
+    if(rest.length){var menu=true,wrapA=document.createElement('div');wrapA.className='acts'+(menu?' menu':'');hd.insertBefore(wrapA,rest[0]);rest.forEach(function(b){wrapA.appendChild(b)});
+      var mb=document.createElement('button');mb.className='btn morebtn'+(menu?' menu':'');mb.dataset.act='more';mb.setAttribute('aria-expanded','false');mb.textContent='More';hd.insertBefore(mb,wrapA);
+      if(rest.some(function(b){return /^Confirm/.test(b.textContent)})){wrapA.classList.add('open');mb.setAttribute('aria-expanded','true')}}}
   view.insertAdjacentHTML('beforeend','<datalist id="team">'+sorted('people').map(function(x){return x.d.name?'<option value="'+esc(x.d.name)+'">':''}).join('')+'</datalist>');
   view.querySelectorAll('textarea').forEach(grow);initInk();
   var k=focusKey||fk;
@@ -2182,6 +2219,7 @@ document.addEventListener('change',function(e){
   if(d.dayjump){if(isDate(el.value))go('today',el.value);return}
   if(d.startpage){try{localStorage.setItem('lw.start',el.value)}catch(err){}toast('This device will open there next time');return}
   if(d.restore){restoreFile(el);return}
+  if(d.newrec){var nrt=el.value;el.value='';if(!nrt)return;var nrp=d.folder?internalProject(d.folder):d.project;var nri=newRecord(nrt,nrp,d.person);go('record',nri);render('records|'+nri+'|title');return}
   if(d['new']){var nv=el.value;el.value='';if(!nv)return;
     if(nv==='action'){var nlist=single('actions').list;go('actions');render('single|actions|list|'+nlist.length+'|t');return}
     if(nv==='project'||nv==='person'){var nk=nv==='project'?'projects':'people',nid=put(nk,newId(),nk==='projects'?newProject(''):newPerson(''));go(nv,nid);render(nk+'|'+nid+'|name');return}
@@ -2212,6 +2250,7 @@ document.addEventListener('focusout',function(e){var el=e.target;if(rendering||!
 document.addEventListener('mousedown',function(e){if(e.target.closest('[data-rich]'))e.preventDefault()});
 document.addEventListener('paste',function(e){var el=e.target.closest&&e.target.closest('[data-r]');if(!el||!e.clipboardData)return;e.preventDefault();
   try{document.execCommand('insertText',false,e.clipboardData.getData('text/plain'))}catch(err){}});
+document.addEventListener('input',function(e){var el=e.target;if(!el.dataset||!el.dataset.kdd)return;el.classList.toggle('empty',!el.value);el.nextElementSibling.textContent=el.value?fmtD(el.value):'Date'});
 /* Paste a block of cells from Excel or Google Sheets into any table: fills across and down from the cell you are in, adding rows as needed. */
 function parseTsv(t){var rows=[],row=[],cell='',q=false,i=0;t=String(t).replace(/\r\n?/g,'\n');
   for(;i<t.length;i++){var c=t[i];
@@ -2315,6 +2354,7 @@ document.addEventListener('click',function(e){
   if(act==='kddel'){var kl=single('dash').keydates||[],ki=+a.dataset.i,kx=kl[ki];if(kx){kl.splice(ki,1);save('single','dash');render();toast('Key date removed',function(){kl.splice(Math.min(ki,kl.length),0,kx);save('single','dash');render()})}return}
   if(act==='rollback'){ui.tlOff=(ui.tlOff||0)-1;render();return}
   if(act==='roll'){ui.tlOff=(ui.tlOff||0)+1;render();return}
+  if(act==='kdtog'){ui.kdOpen=!ui.kdOpen;render(ui.kdOpen?'kd|t':undefined);return}
   if(act==='rollnow'){ui.tlOff=0;render();return}
   if(act==='copyfrom'||act==='dismissnew'){d=store.projects[ui.id];
     if(act==='copyfrom'){var srcId=ui.from||Object.keys(store.projects).filter(function(x){return x!==ui.id})[0],src=store.projects[srcId];if(!src)return;
