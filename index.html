@@ -710,7 +710,7 @@ var DEF={dash:function(){return {top3:[],tl:{},notes:'',follow:[],changes:[],rem
 function single(id){if(!store.single[id])store.single[id]=(DEF[id]||function(){return {}})();return store.single[id]}
 function templates(){var s=single('settings');if(!Array.isArray(s.checklists))s.checklists=[];return s.checklists}
 function fromTemplate(t){return {name:t.name,items:(t.items||[]).filter(function(i){return i.t}).map(function(i){return {t:i.t,done:false,note:''}})}}
-function newProject(name){return {name:name||'',isNew:true,client:'',phase:'',status:'',ts:Date.now(),dash:{},snap:{},team:{},risks:[],start:'',sched:[],changes:[],vendor:[],lessons:[],checks:templates().map(fromTemplate),
+function newProject(name){return {name:name||'',isNew:true,client:'',phase:'',status:'',ts:Date.now(),dash:{},snap:{},team:{},risks:[],start:'',sched:[],changes:[],vendor:[],lessons:[],
   wiki:{snapshot:'',scope:'',glossary:'',links:[],ask:[],doc:{},flows:{},stds:{},meetings:[],contacts:[],tools:[]}}}
 function newPerson(name){return {name:name||'',role:'',started:'',ts:Date.now(),dash:{},skills:'',develop:'',plan:[],reg:{},checkins:[],notes:''}}
 function sorted(kind,arch){return Object.keys(store[kind]).map(function(id){return {id:id,d:store[kind][id]}}).filter(function(x){return !!x.d.archived===!!arch})
@@ -739,7 +739,13 @@ function intake(kind,snap){
   Object.keys(gone).forEach(function(key){var p=key.split('/');if(p[0]===kind&&!ids[p[1]])delete gone[key]});
   return changed;
 }
-function migrate(){mergeLists();Object.keys(store.records).forEach(function(id){var r=store.records[id];if(r&&'folder' in r){if(r.folder&&!r.project)r.project=internalProject(r.folder);delete r.folder;save('records',id,true)}});var dt=store.single.dash;if(dt&&Array.isArray(dt.top3)&&dt.top3.some(function(r){return r&&r.t})){dt.top3.forEach(function(r){if(r&&r.t)single('actions').list.push({t:r.t,pri:true,done:!!r.done,kind:''})});dt.top3=[];save('single','dash',true);save('single','actions',true)}Object.keys(store.projects).forEach(function(id){if(convSched(store.projects[id]))save('projects',id,true)});var d=store.single.dash;if(d&&Array.isArray(d.props)&&d.props.length){var bd=single('bd');
+function moveChecks(){var tp=templates();Object.keys(store.projects).forEach(function(pid){var p=store.projects[pid];if(!p||!('checks' in p))return;
+  (Array.isArray(p.checks)?p.checks:[]).forEach(function(k,ci){var items=(k&&k.items||[]).filter(function(i){return i&&i.t}),t=tp.filter(function(x){return x.name===k.name})[0];
+    var untouched=items.every(function(i){return !i.done&&!i.note})&&t&&stable(items.map(function(i){return i.t}))===stable((t.items||[]).filter(function(i){return i.t}).map(function(i){return i.t}));
+    if(untouched||!items.length)return;var rid='ck'+pid+'_'+ci;
+    if(!store.records[rid])put('records',rid,{type:'checklist',title:k.name||'Checklist',date:p.updated||today(),project:pid,person:'',ts:p.ts||Date.now(),d:{items:items}})});
+  delete p.checks;save('projects',pid,true)})}
+function migrate(){mergeLists();moveChecks();Object.keys(store.records).forEach(function(id){var r=store.records[id];if(r&&'folder' in r){if(r.folder&&!r.project)r.project=internalProject(r.folder);delete r.folder;save('records',id,true)}});var dt=store.single.dash;if(dt&&Array.isArray(dt.top3)&&dt.top3.some(function(r){return r&&r.t})){dt.top3.forEach(function(r){if(r&&r.t)single('actions').list.push({t:r.t,pri:true,done:!!r.done,kind:''})});dt.top3=[];save('single','dash',true);save('single','actions',true)}Object.keys(store.projects).forEach(function(id){if(convSched(store.projects[id]))save('projects',id,true)});var d=store.single.dash;if(d&&Array.isArray(d.props)&&d.props.length){var bd=single('bd');
     d.props.forEach(function(r){if(r&&r.t)bd.pipeline.push({opp:r.t})});delete d.props;save('single','dash',true);save('single','bd',true)}}
 function status(){var el=document.getElementById('status');if(!el)return;
   el.className=mode==='local'?'warn':'';
@@ -892,6 +898,7 @@ var OFFICE=[L(null,T('items','Team and business actions',[{k:'done',type:'check'
   L(null,T('improve','Improvements',[{k:'t',label:'Idea or annoyance',w:'2fr'},{k:'area',label:'Area (standards, templates, tools)'},{k:'status',label:'Status',type:'select',optsRef:'IMPST',w:'118px'}],{wide:1})),
   L(null,R('notes','Notes',null,160))];
 /* dated records: the forms that get created and filed */
+var CKCOLS=[{k:'done',type:'check',w:'34px',label:'Done',rr:1},{k:'t',label:'Check',w:'2fr'},{k:'note',label:'Note'}];
 var FORMS={
   meeting:{name:'Meeting notes',title:'Meeting',rows:[L(null,A('attendees','Attendees',2)),L(null,R('notes','Notes',null,240)),L(null,ACTIONS()),L(null,FILES('Attachments'))]},
   general:{name:'General notes',title:'Subject',rows:[L(null,R('notes','Notes',null,360))]},
@@ -915,6 +922,7 @@ var FORMS={
     L(null,T('comments','Comments',[{k:'ref',label:'Ref (drawing, tag)',w:'.7fr'},{k:'comment',label:'Comment',type:'area',w:'2fr'},{k:'action',label:'Action or response',type:'area',w:'1.3fr'},{k:'who',label:'Who',w:'.5fr'},{k:'closed',label:'Closed',type:'check',w:'60px'}],{wide:1})),L(null,FILES('Marked-up drawings and files'))]},
   site:{name:'Site visit and inspection',title:'Location or vendor',link:'project',rows:[L(null,KV('info','Visit',[['purpose','Purpose'],['present','Present']])),
     L(null,T('obs','Observations',[{k:'t',label:'Observation',type:'area',w:'2.4fr'},{k:'photo',label:'Photo ref',w:'.6fr'}])),L(null,FILES('Photos and files')),L(null,R('notes','Notes',null,120)),L(null,ACTIONS('Punch items and actions'))]},
+  checklist:{name:'Checklist',title:'Name',rows:[L(null,T('items','Checks',CKCOLS,{wide:1})),L(null,R('notes','Notes',null,120))]},
   proposal:{name:'Proposal notes',title:'Opportunity',rows:[L(null,KV('info','Opportunity',[['client','Client'],['contact','Contact'],['phase','Phase or type'],['due','Due','date']])),L(null,A('scope','Scope summary',3)),
     L(null,T('deliv','Deliverables and hours',[{k:'t',label:'Deliverable',w:'2fr'},{k:'qty',label:'Qty',type:'num',w:'.4fr'},{k:'eng',label:'Engineering hrs',type:'num',w:'.6fr'},{k:'dft',label:'Drafting hrs',type:'num',w:'.6fr'},{k:'tot',label:'Total hrs',type:'num',w:'.6fr'}],{wide:1})),
     L([1,1],A('clar','Clarifications',4),A('excl','Exclusions',4)),L(null,A('risks','Risks and unknowns',3)),L(null,TICKS('next','Next steps'))]}
@@ -951,14 +959,20 @@ function getLayout(lid){var own=layouts().L[lid];
 function formDef(type){var F=FORMS[type];if(F)return {name:F.name,title:F.title,rows:getLayout('f_'+type).rows,lid:'f_'+type};
   var pg=pages('form').filter(function(p){return 'c_'+p.id===type})[0];if(pg)return {name:pg.name||'Custom form',title:'Title',rows:getLayout(type).rows,lid:type};
   return {name:'Record',title:'Title',rows:[],lid:null}}
-function formOpts(){return Object.keys(FORMS).map(function(k){return [k,FORMS[k].name]}).concat(pages('form').map(function(p){return ['c_'+p.id,p.name||'Custom form']}))}
+function formOpts(){return Object.keys(FORMS).filter(function(k){return k!=='checklist'}).map(function(k){return [k,FORMS[k].name]})
+  .concat(templates().map(function(t,i){return ['checklist:'+i,'Checklist: '+(t.name||'Untitled')]}),[['checklist','Checklist: blank']]).concat(pages('form').map(function(p){return ['c_'+p.id,p.name||'Custom form']}))}
+function newRecord(type,project,person){var r={type:type,title:'',date:today(),project:project||'',person:person||'',ts:Date.now(),d:{}};
+  if(type.indexOf('checklist:')===0){var t=templates()[+type.slice(10)];r.type='checklist';if(t){r.title=t.name||'';r.d.items=fromTemplate(t).items}}
+  return put('records',newId(),r)}
+function ckCount(r){var it=(r&&r.d&&r.d.items||[]).filter(function(i){return i&&i.t});return {n:it.length,d:it.filter(function(i){return i.done}).length}}
+function recSummary(r){if(r.type==='checklist'){var c=ckCount(r);return c.n?(c.d===c.n?'Complete, ':'')+c.d+' of '+c.n+' done':''}return (r.d||{}).summary||''}
 function isInt(p){return !!(p&&p.scope==='internal')}
 function projSplit(arch){var a=sorted('projects',arch);return {ext:a.filter(function(x){return !isInt(x.d)}),int:a.filter(function(x){return isInt(x.d)})}}
 function projGroups(none){var s=projSplit(),m=function(x){return [x.id,x.d.name||'Untitled project']};return [['',none]].concat(s.int.length?[{group:'External projects',items:s.ext.map(m)},{group:'Internal',items:s.int.map(m)}]:s.ext.map(m))}
 function projOpts(){return projGroups('None')}
 var SCOPES=[['','External'],['internal','Internal']];
 function internalProject(name){var n=String(name||'').trim().toLowerCase();if(!n)return '';var hit=Object.keys(store.projects).filter(function(id){var p=store.projects[id];return isInt(p)&&!p.archived&&String(p.name||'').trim().toLowerCase()===n})[0];
-  if(hit)return hit;var p=newProject(name);p.scope='internal';p.isNew=false;p.checks=[];return put('projects',newId(),p)}
+  if(hit)return hit;var p=newProject(name);p.scope='internal';p.isNew=false;return put('projects',newId(),p)}
 function projOrder(){var s=projSplit();return s.ext.concat(s.int)}
 function peopleOpts(){return [['','None']].concat(sorted('people').map(function(x){return [x.id,x.d.name||'Unnamed']}))}
 var colsOf=function(b,doc){return b.weeks?weekCols((doc||{}).start,b.weeks.first,b.weeks.label):(b.cols||[])};
@@ -1069,6 +1083,8 @@ function layOp(op,val){
 var editBtn=function(lid){return '<button class="btn" data-act="edit" data-lid="'+lid+'">Edit layout</button>'};
 
 /* ================= derived data: actions, dates, roll-ups, search ================= */
+function projChecks(pid){return Object.keys(store.records).filter(function(rid){var r=store.records[rid];return r.type==='checklist'&&r.project===pid})
+  .map(function(rid){return {id:rid,d:store.records[rid]}}).sort(function(a,b){return (b.d.date||'').localeCompare(a.d.date||'')||(b.d.ts||0)-(a.d.ts||0)})}
 function recLabel(r){return formDef(r.type).name+(r.title?': '+r.title:'')}
 var rev=0, actCache=null, actRev=-1;
 function feedCols(b){var cols=b.cols||[],one=function(fn){return cols.filter(fn)[0]};
@@ -1100,7 +1116,7 @@ function rollup(id){var p=store.projects[id],t=today(),out=[];
   var h=(p.risks||[]).filter(function(r){return r.t&&!r.done}).length;if(h)out.push([h+' open '+(h===1?'hold':'holds'),false]);
   var acts=allActions().filter(function(a){return a.project===id&&!a.done}),late=acts.filter(isLate).length;
   if(acts.length)out.push([acts.length+' open '+(acts.length===1?'action':'actions')+(late?', '+late+' overdue':''),!!late]);
-  (p.checks||[]).forEach(function(k){var n=(k.items||[]).length,d=(k.items||[]).filter(function(i){return i.done}).length;if(n&&d<n)out.push([k.name+' '+d+'/'+n,false])});
+  projChecks(id).forEach(function(x){var c=ckCount(x.d);if(c.n&&c.d<c.n)out.push([(x.d.title||'Checklist')+' '+c.d+'/'+c.n,false])});
   return out}
 function dated(){var out=[];
   sorted('projects').forEach(function(x){(x.d.vendor||[]).forEach(function(r){if(r.due&&!r.rec)out.push({d:r.due,t:'Vendor data: '+(r.data||r.pkg||'item')+' ('+(x.d.name||'project')+')',go:{v:'project',id:x.id}})})});
@@ -1157,7 +1173,7 @@ var mark=function(s){return s&&MARK[s]?'<span class="mk '+s+'" title="'+esc(STAT
 function recordList(filter,emptyMsg){
   var recs=Object.keys(store.records).map(function(id){return {id:id,d:store.records[id]}}).filter(filter).sort(function(a,b){return (a.d.date||'')<(b.d.date||'')?1:(a.d.date||'')>(b.d.date||'')?-1:(b.d.ts||0)-(a.d.ts||0)});
   if(!recs.length)return '<p class="empty">'+emptyMsg+'</p>';
-  return '<ul class="list">'+recs.map(function(x){var r=x.d,p=store.projects[r.project],e=store.people[r.person],sum=(r.d||{}).summary;
+  return '<ul class="list">'+recs.map(function(x){var r=x.d,p=store.projects[r.project],e=store.people[r.person],sum=recSummary(r);
     return '<li><span class="d">'+fmtL(r.date)+'</span><button class="link" data-go="record" data-id="'+x.id+'">'+esc(r.title||'Untitled')+'</button><span class="k">'+esc(formDef(r.type).name)+'</span>'
       +(sum?'<span>'+esc(sum)+'</span>':'')+'<span class="sp"></span><span class="k">'+esc([p&&p.name,e&&e.name].filter(Boolean).join(', '))+'</span></li>'}).join('')+'</ul>'}
 function newRecordCtl(project,person,folder){return '<select data-ui="rtype" aria-label="Record type" style="border:1px solid var(--line);background:transparent;border-radius:3px;padding:5px 6px">'+opts([['','Choose a type']].concat(formOpts()),ui.rtype)+'</select>'
@@ -1552,27 +1568,27 @@ window.addEventListener('resize',function(){if(gLastN&&gWeeks()!==gLastN&&!inkCu
 V.project=function(){
   var id=ui.id,d=store.projects[id];if(!d){ui.v='dash';return V.dash()}
   var recs=Object.keys(store.records).filter(function(r){return store.records[r].project===id}).length;
-  var cdone=0,ctot=0;(d.checks||[]).forEach(function(k){(k.items||[]).forEach(function(i){ctot++;if(i.done)cdone++})});
+  var cks=projChecks(id),copen=cks.filter(function(x){var c=ckCount(x.d);return c.d<c.n}).length;
   var tab=function(k,l){return '<button data-tab="'+k+'" aria-pressed="'+(ui.tab===k)+'">'+l+'</button>'};
   var ctabs=pages('project');if(ui.tab.indexOf('c_')===0&&!ctabs.some(function(p){return 'c_'+p.id===ui.tab}))ui.tab='sheet';
   var lid=ui.tab==='sheet'||ui.tab==='wiki'||ui.tab.indexOf('c_')===0?ui.tab:null;
   var h='<div class="head"><h1>'+mark(d.status)+' '+esc(d.name||'Untitled project')+'</h1><span class="sp"></span>'+updated(d)+pdfBtn+(lid&&!ui.edit?editBtn(lid)+(ui.tab==='sheet'?'<button class="btn" data-act="edit" data-lid="own:projects:'+id+'">Add sections to this project only</button>':''):'')
     +'<button class="btn" data-act="archive" data-kind="projects">'+(d.archived?'Restore from archive':'Archive')+'</button><button class="btn danger" data-act="del" data-kind="projects">'+(ui.confirm==='del'?'Confirm delete':'Delete')+'</button></div>'
     +hfields('projects',id,[['name','Project',1.4],['client','Client',1.1],['phase','Phase',.9,'select',PHASES],['status','Status',.8,'select',STATUS],['scope','Type',.7,'select',SCOPES]])
-    +'<div class="tabs" style="margin-bottom:12px">'+tab('sheet','Project sheet')+tab('wiki','Project wiki')+tab('checks','Checklists'+(ctot?' '+cdone+'/'+ctot:''))+tab('records','Records'+(recs?' '+recs:''))+ctabs.map(function(p){return tab('c_'+p.id,esc(p.name||'Untitled'))}).join('')+'</div>';
+    +'<div class="tabs" style="margin-bottom:12px">'+tab('sheet','Project sheet')+tab('wiki','Project wiki')+tab('checks','Checklists'+(copen?' '+copen+' open':''))+tab('records','Records'+(recs?' '+recs:''))+ctabs.map(function(p){return tab('c_'+p.id,esc(p.name||'Untitled'))}).join('')+'</div>';
   if(ui.edit&&lid)return h+editor(ui.edit);
   if(ui.tab==='wiki')return h+rRows('projects',id,'wiki.',getLayout('wiki').rows);
   if(ui.tab.indexOf('c_')===0)return h+(rRows('projects',id,'x.'+ui.tab.slice(2)+'.',getLayout(ui.tab).rows)||'<p class="empty">This tab has no sections yet. Choose Edit layout to add some.</p>');
   if(ui.tab==='records')return h+box('Records for this project',recordList(function(x){return x.d.project===id},'No records yet. Meeting notes, check-ins, reviews and site visits filed against this project appear here.'),'',newRecordCtl(id,''));
-  if(ui.tab==='checks'){var cl=d.checks||[];
-    return h+(cl.length?cl.map(function(k,ci){var n=(k.items||[]).length,dn=(k.items||[]).filter(function(i){return i.done}).length,nk='projects|'+id+'|checks.'+ci+'.name';
-      return '<div class="g"><section class="box"><div class="bt"><input data-b="'+nk+'" data-k="'+nk+'" value="'+esc(k.name)+'" aria-label="Checklist name" style="border:0;background:transparent;font-weight:600;font-size:.9rem;min-width:0;flex:0 1 260px"><span>'+dn+' of '+n+' done</span><span class="r"><button class="mini" data-act="rmcheck" data-i="'+ci+'">'+(ui.confirm==='rm'+ci?'Confirm remove':'Remove checklist')+'</button></span></div>'
-        +table('projects',id,'checks.'+ci+'.items',[{k:'done',type:'check',w:'34px',label:'Done',rr:1},{k:'t',label:'Check',w:'2fr'},{k:'note',label:'Note'}],{wide:1})+'</section></div>'}).join(''):'<p class="empty">No checklists on this project yet.</p>')
+  if(ui.tab==='checks')return h+(cks.length?cks.map(function(x){var c=ckCount(x.d);
+      return '<div class="g"><section class="box"><div class="bt"><button class="link" data-go="record" data-id="'+x.id+'"><b>'+esc(x.d.title||'Checklist')+'</b></button><span>'+esc(fmtL(x.d.date))+', '+c.d+' of '+c.n+' done</span>'
+        +'<span class="r"><button class="mini" data-go="record" data-id="'+x.id+'">Open record</button></span></div>'
+        +table('records',x.id,'d.items',CKCOLS,{wide:1})+'</section></div>'}).join(''):'<p class="empty">No checklists on this project yet. Start one when the stage comes up, such as kickoff or issue for construction. Each one is kept as a dated record.</p>')
       +'<div class="head"><select data-ui="tpl" aria-label="Checklist template" style="border:1px solid var(--line);background:transparent;border-radius:3px;padding:5px 6px">'+opts(templates().map(function(t,i){return [i,t.name||'Untitled checklist']}).concat([['blank','Blank checklist']]),ui.tpl)+'</select>'
-      +'<button class="btn" data-act="addcheck">Add checklist</button><span class="sp"></span><button class="mini" data-go="settings">Edit checklist templates</button></div>'}
+      +'<button class="btn" data-act="addcheck">Start checklist</button><span class="sp"></span><button class="mini" data-go="settings">Edit checklist templates</button></div>';
   var others=Object.keys(store.projects).filter(function(x){return x!==id}).map(function(x){return [x,(store.projects[x].name||'Untitled project')+(store.projects[x].archived?' (archived)':'')]});
   var from=d.isNew&&others.length?'<div class="g nop">'+box('Start from an existing project','<div class="eline"><select class="ein" data-ui="from" aria-label="Project to copy from">'+opts(others,ui.from||others[0][0])+'</select>'
-    +'<button class="btn pri" data-act="copyfrom">Copy its wiki, checklists and team</button><button class="btn" data-act="dismissnew">Start blank</button></div>','Checklist ticks and notes are cleared in the copy'):'';
+    +'<button class="btn pri" data-act="copyfrom">Copy its wiki and team</button><button class="btn" data-act="dismissnew">Start blank</button></div>','Records and checklists stay with the original project'):'';
   return h+from+rRows('projects',id,'',getLayout('sheet').rows)+rRows('projects',id,'',(d.own||{}).rows);
 };
 V.person=function(){
@@ -1683,7 +1699,7 @@ V.settings=function(){
     +'<div class="g">'+box('Built-in layouts','<p class="empty">To change a built-in page, open it and choose Edit layout: the project sheet and wiki from any project, the person sheet from any person, a record form from any record of that type.</p>')+'</div>'
     +'<div class="g">'+box('Backup','<p class="empty">A backup file holds everything in this workspace. Restoring replaces what is here with the file\'s contents.</p><div class="head" style="padding:0 9px 10px;margin:0"><button class="btn" data-act="backup">Download backup</button>'
       +'<label class="btn" style="cursor:pointer">'+(ui.confirm==='restore'?'Choose the file to restore from':'Restore from backup')+'<input class="file" type="file" accept=".json,application/json" data-restore="1"></label></div>')+'</div>'
-    +'<div class="head" style="margin-top:18px"><h2 style="font-size:1.3rem">Checklist templates</h2><span class="meta">New projects start with a copy of each. Editing a template does not change projects that already have it.</span></div>'
+    +'<div class="head" style="margin-top:18px"><h2 style="font-size:1.3rem">Checklist templates</h2><span class="meta">Start one from a project\u2019s Checklists tab or as a new record. Editing a template does not change checklists already started.</span></div>'
     +tp.map(function(t,i){var nk='single|settings|checklists.'+i+'.name';
       return '<div class="g"><section class="box"><div class="bt"><input data-b="'+nk+'" data-k="'+nk+'" value="'+esc(t.name)+'" placeholder="Checklist name" aria-label="Checklist name" style="border:0;background:transparent;font-weight:600;font-size:.9rem;min-width:0;flex:0 1 260px"><span class="r"><button class="mini" data-act="rmtpl" data-i="'+i+'">'+(ui.confirm==='tpl'+i?'Confirm remove':'Remove template')+'</button></span></div>'
         +table('single','settings','checklists.'+i+'.items',[{k:'t',label:'Check'}],{nohead:1})+'</section></div>'}).join('')
@@ -1711,7 +1727,7 @@ function currentModel(){var v=ui.v,d,nm;
   if(v==='project'){d=store.projects[ui.id];nm=d.name||'Untitled project';var meta=[['Client',d.client],['Phase',d.phase],['Status',cellText({type:'select',opts:STATUS},d.status)]];
     if(ui.tab==='wiki')return {title:nm,kicker:'Project wiki',meta:meta,rows:mRows(d,'wiki.',getLayout('wiki').rows)};
     if(ui.tab.indexOf('c_')===0)return {title:nm,kicker:layoutInfo(ui.tab)[0],meta:meta,rows:mRows(d,'x.'+ui.tab.slice(2)+'.',getLayout(ui.tab).rows)};
-    if(ui.tab==='checks')return {title:nm,kicker:'Checklists',meta:meta,rows:(d.checks||[]).map(function(k){return {cols:[[{t:k.name,kind:'table',cols:[{label:'',w:.12,type:'check'},{label:'Check',w:2},{label:'Note',w:1}],rows:(k.items||[]).map(function(i){return [!!i.done,i.t||'',i.note||'']})}]]}})};
+    if(ui.tab==='checks')return {title:nm,kicker:'Checklists',meta:meta,rows:projChecks(ui.id).map(function(x){return {cols:[[{t:(x.d.title||'Checklist')+', '+fmtL(x.d.date),kind:'table',cols:[{label:'',w:.12,type:'check'},{label:'Check',w:2},{label:'Note',w:1}],rows:(x.d.d&&x.d.d.items||[]).filter(function(i){return i.t}).map(function(i){return [!!i.done,i.t||'',i.note||'']})}]]}})};
     if(ui.tab==='records')return {title:nm,kicker:'Records',meta:meta,rows:[{cols:[[recordsModel(function(x){return x.project===ui.id})]]}]};
     return {title:nm,kicker:'Project sheet',meta:meta,rows:mRows(d,'',getLayout('sheet').rows).concat(mRows(d,'',(d.own||{}).rows))}}
   if(v==='person'){d=store.people[ui.id];if(ui.tab.indexOf('c_')===0)return {title:d.name||'Unnamed',kicker:layoutInfo(ui.tab)[0],meta:[['Role',d.role]],rows:mRows(d,'x.'+ui.tab.slice(2)+'.',getLayout(ui.tab).rows)};
@@ -1730,7 +1746,7 @@ function currentModel(){var v=ui.v,d,nm;
     return {title:d.title||F.name,kicker:F.name,meta:[['Date',fmtL(d.date)],['Project',p?p.name:''],['Person',e?e.name:'']].filter(function(m){return m[1]}),rows:mRows(d,'d.',F.rows)}}
   return null}
 function recordsModel(filter){var recs=Object.keys(store.records).map(function(id){return store.records[id]}).filter(filter).sort(function(a,b){return (a.date||'')<(b.date||'')?1:-1});
-  return {t:'Records',kind:'table',cols:[{label:'Date',w:.6},{label:'Form',w:.9},{label:'Title',w:1.2},{label:'Summary',w:2}],rows:recs.map(function(r){return [fmtL(r.date),formDef(r.type).name,r.title||'',(r.d||{}).summary||'']})}}
+  return {t:'Records',kind:'table',cols:[{label:'Date',w:.6},{label:'Form',w:.9},{label:'Title',w:1.2},{label:'Summary',w:2}],rows:recs.map(function(r){return [fmtL(r.date),formDef(r.type).name,r.title||'',recSummary(r)]})}}
 function richBlocks(html){var t=document.createElement('template');t.innerHTML=cleanHtml(html);var blocks=[],cur=null;
   function nb(bullet){cur={bullet:bullet,runs:[]};blocks.push(cur)}
   (function walk(n,b,i){[].forEach.call(n.childNodes,function(c){
@@ -2145,7 +2161,7 @@ document.addEventListener('change',function(e){
   if(d['new']){var nv=el.value;el.value='';if(!nv)return;
     if(nv==='action'){var nlist=single('actions').list;go('actions');render('single|actions|list|'+nlist.length+'|t');return}
     if(nv==='project'||nv==='person'){var nk=nv==='project'?'projects':'people',nid=put(nk,newId(),nk==='projects'?newProject(''):newPerson(''));go(nv,nid);render(nk+'|'+nid+'|name');return}
-    var nr=put('records',newId(),{type:nv.slice(2),title:'',date:today(),project:ui.v==='project'?ui.id:'',person:ui.v==='person'?ui.id:'',ts:Date.now(),d:{}});go('record',nr);render('records|'+nr+'|title');return}
+    var nr=newRecord(nv.slice(2),ui.v==='project'?ui.id:'',ui.v==='person'?ui.id:'');go('record',nr);render('records|'+nr+'|title');return}
   if(d.inkw){inkUI.width=+el.value||2;inkBars();return}
   if(d.inkp){var pd=inkData(d.inkp,true);if(pd){pd.p=el.value;inkSave(d.inkp);sizeKey(d.inkp)}return}
   if(d.files){uploadFiles(el);return}
@@ -2232,9 +2248,9 @@ document.addEventListener('click',function(e){
   if(act==='rmblock'){var gb=layouts().blocks.splice(+a.dataset.i,1)[0];save('single','layouts');render();toast('Removed the block',function(){layouts().blocks.splice(+a.dataset.i,0,gb);save('single','layouts');render()});return}
   if(act==='rmpage'){var pi=+a.dataset.i;if(ui.confirm!=='pg'+pi){ui.confirm='pg'+pi;render();return}ui.confirm=null;var gonePg=layouts().pages.splice(pi,1)[0];save('single','layouts');render();
     toast('Removed '+(gonePg.name||'it')+'. Its entries are kept.',function(){layouts().pages.splice(pi,0,gonePg);save('single','layouts');render()});return}
-  if(act==='new'){var nd=kind==='projects'?newProject(''):newPerson('');if(kind==='projects'&&a.dataset.scope==='internal'){nd.scope='internal';nd.checks=[]}var id=put(kind,newId(),nd);ui.v=kind==='projects'?'project':'person';ui.id=id;ui.tab='sheet';remember();render(kind+'|'+id+'|name');window.scrollTo(0,0);return}
+  if(act==='new'){var nd=kind==='projects'?newProject(''):newPerson('');if(kind==='projects'&&a.dataset.scope==='internal'){nd.scope='internal'}var id=put(kind,newId(),nd);ui.v=kind==='projects'?'project':'person';ui.id=id;ui.tab='sheet';remember();render(kind+'|'+id+'|name');window.scrollTo(0,0);return}
   if(act==='newrec'){var type=a.dataset.type||ui.rtype;if(!type){toast('Choose a type of record first.');return}
-    if(a.dataset.folder)a.dataset.project=internalProject(a.dataset.folder);var rid=put('records',newId(),{type:type,title:'',date:today(),project:a.dataset.project||'',person:a.dataset.person||'',ts:Date.now(),d:{}});go('record',rid);render('records|'+rid+'|title');return}
+    if(a.dataset.folder)a.dataset.project=internalProject(a.dataset.folder);var rid=newRecord(type,a.dataset.project,a.dataset.person);go('record',rid);render('records|'+rid+'|title');return}
   if(act==='del'){if(ui.confirm!=='del'){ui.confirm='del';render();return}
     d=store[kind][ui.id];var back=kind==='records'?'records':'dash';delDoc(kind,ui.id,kind==='records'?'the record':(d.name||'it'));ui.confirm=null;ui.v=back;ui.id=null;remember();render();return}
   if(act==='archive'){d=store[kind][ui.id];d.archived=!d.archived;save(kind,ui.id);toast(d.archived?'Archived. Find it under Archive and snapshots.':'Restored');if(d.archived){ui.v='dash';ui.id=null;remember()}render();return}
@@ -2246,8 +2262,8 @@ document.addEventListener('click',function(e){
   if(act==='rollnow'){ui.tlOff=0;render();return}
   if(act==='copyfrom'||act==='dismissnew'){d=store.projects[ui.id];
     if(act==='copyfrom'){var srcId=ui.from||Object.keys(store.projects).filter(function(x){return x!==ui.id})[0],src=store.projects[srcId];if(!src)return;
-      d.wiki=clone(src.wiki||{});d.team=clone(src.team||{});d.checks=clone(src.checks||[]).map(function(k){(k.items||[]).forEach(function(i){i.done=false;i.note=''});return k});
-      toast('Copied the wiki, checklists and team from '+(src.name||'that project'))}
+      d.wiki=clone(src.wiki||{});d.team=clone(src.team||{});
+      toast('Copied the wiki and team from '+(src.name||'that project'))}
     delete d.isNew;save('projects',ui.id);render();return}
   if(act==='lb'){var lb=document.getElementById('lb');lb.innerHTML='<img src="'+esc(a.dataset.src)+'" alt="'+esc(a.dataset.name)+'"><button class="btn pri" data-act="lbclose">Close</button>';lb.classList.add('on');lb.querySelector('button').focus();return}
   if(act==='inktoggle'){var ikey=a.dataset.key,ip=ikey.split('|'),cur=get(store[ip[0]][ip[1]]||{},ip[2]+'_ink');inkOpen[ikey]=!(inkOpen[ikey]==null?!!(cur&&cur.s&&cur.s.length):inkOpen[ikey]);var bw=a.closest('.box');bw=bw?bw.clientWidth:999;render();if(inkOpen[ikey]&&bw<470)inkFs(ikey+'_ink',a.closest('.box')?a.closest('.box').querySelector('.bt b').textContent:'Notes',380);return}
@@ -2282,9 +2298,7 @@ document.addEventListener('click',function(e){
   if(act==='toggledone'){ui.showDone=!ui.showDone;render();return}
   if(act==='rgroup'){ui.rgroup=a.dataset.g;render();return}
   if(act==='agroup'){ui.agroup=a.dataset.g;try{localStorage.setItem('lw.agroup',ui.agroup)}catch(e){}render();return}
-  if(act==='addcheck'){d=store.projects[ui.id];var tp=templates(),sel=ui.tpl==null?'0':String(ui.tpl);d.checks=d.checks||[];
-    d.checks.push(sel==='blank'||!tp[+sel]?{name:'New checklist',items:[]}:fromTemplate(tp[+sel]));save('projects',ui.id);render();return}
-  if(act==='rmcheck'){var ci=+a.dataset.i;if(ui.confirm!=='rm'+ci){ui.confirm='rm'+ci;render();return}ui.confirm=null;store.projects[ui.id].checks.splice(ci,1);save('projects',ui.id);render();return}
+  if(act==='addcheck'){var sel=ui.tpl==null?'0':String(ui.tpl),tp=templates();newRecord(sel==='blank'||!tp[+sel]?'checklist':'checklist:'+sel,ui.id,'');render();return}
   if(act==='addtpl'){templates().push({id:newId(),name:'',items:[]});save('single','settings');render('single|settings|checklists.'+(templates().length-1)+'.name');return}
   if(act==='rmtpl'){var ti=+a.dataset.i;if(ui.confirm!=='tpl'+ti){ui.confirm='tpl'+ti;render();return}ui.confirm=null;templates().splice(ti,1);save('single','settings');render();return}
   if(act==='snap'){var model=modelDash();put('snaps',newId(),{date:today(),ts:Date.now(),json:JSON.stringify(model)});exportPdf(model,'Dashboard_snapshot_'+today()+'.pdf');if(!dl)toast('Snapshot saved under Archive and snapshots.');return}
@@ -2296,7 +2310,7 @@ function restoreFile(el){var file=el.files&&el.files[0];if(!file)return;var rd=n
   rd.onload=function(){var data;try{data=JSON.parse(rd.result)}catch(e){data=null}
     if(!data||data.app!=='lead-workspace'||typeof data.projects!=='object'){toast("That file isn't a Lead workspace backup.");return}
     var before={};KINDS.forEach(function(k){before[k]=clone(store[k])});
-    applyAll(data);toast('Restored from the backup',function(){applyAll(before);render()});render()};
+    applyAll(data);moveChecks();toast('Restored from the backup',function(){applyAll(before);render()});render()};
   rd.onerror=function(){toast("That file couldn't be read.")};rd.readAsText(file)}
 function applyAll(data){var chain=Promise.resolve();
   KINDS.forEach(function(k){var incoming=data[k]&&typeof data[k]==='object'?data[k]:{};
