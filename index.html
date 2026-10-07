@@ -2188,6 +2188,37 @@ document.addEventListener('focusout',function(e){var el=e.target;if(rendering||!
 document.addEventListener('mousedown',function(e){if(e.target.closest('[data-rich]'))e.preventDefault()});
 document.addEventListener('paste',function(e){var el=e.target.closest&&e.target.closest('[data-r]');if(!el||!e.clipboardData)return;e.preventDefault();
   try{document.execCommand('insertText',false,e.clipboardData.getData('text/plain'))}catch(err){}});
+/* Paste a block of cells from Excel or Google Sheets into any table: fills across and down from the cell you are in, adding rows as needed. */
+function parseTsv(t){var rows=[],row=[],cell='',q=false,i=0;t=String(t).replace(/\r\n?/g,'\n');
+  for(;i<t.length;i++){var c=t[i];
+    if(q){if(c==='"'){if(t[i+1]==='"'){cell+='"';i++}else q=false}else cell+=c}
+    else if(c==='"'&&cell==='')q=true;else if(c==='\t'){row.push(cell);cell=''}else if(c==='\n'){row.push(cell);rows.push(row);row=[];cell=''}else cell+=c}
+  if(cell!==''||row.length){row.push(cell);rows.push(row)}
+  return rows}
+function pasteDate(v){v=String(v).trim();if(!v)return '';var m=/^(\d{4})-(\d\d?)-(\d\d?)/.exec(v);if(m)return iso(new Date(+m[1],m[2]-1,+m[3]));
+  m=/^(\d\d?)[\/.\-](\d\d?)[\/.\-](\d{2,4})$/.exec(v);if(m){var y=+m[3];if(y<100)y+=2000;var dmy=+m[2]<=12,dd=dmy?+m[1]:+m[2],mm=dmy?+m[2]:+m[1];return iso(new Date(y,mm-1,dd))}
+  m=/^(\d\d?)[\s\-]([A-Za-z]{3,})[\s\-,]*(\d{2,4})$/.exec(v);if(m){var y2=+m[3];if(y2<100)y2+=2000;var t2=Date.parse(m[1]+' '+m[2]+' '+y2);if(!isNaN(t2))return iso(new Date(t2))}
+  var t=Date.parse(v);return isNaN(t)?'':iso(new Date(t))}
+function pasteVal(ctl,v){v=String(v==null?'':v).trim();
+  if(ctl.type==='checkbox')return /^(x|y|yes|true|1|done|closed|complete|✓|✔)$/i.test(v);
+  if(ctl.type==='date')return pasteDate(v);
+  if(ctl.tagName==='SELECT'){var lv=v.toLowerCase(),hit=[].filter.call(ctl.options,function(o){return o.value.toLowerCase()===lv||o.text.trim().toLowerCase()===lv})[0];return hit?hit.value:''}
+  return v}
+document.addEventListener('paste',function(e){var el=e.target.closest&&e.target.closest('[data-l]');if(!el||!e.clipboardData)return;
+  var txt=e.clipboardData.getData('text/plain')||'',html=e.clipboardData.getData('text/html')||'';
+  if(txt.indexOf('\t')<0&&!/<table/i.test(html))return;
+  var grid=parseTsv(txt.replace(/\n+$/,''));if(!grid.length)return;e.preventDefault();
+  var q=el.dataset.l.split('|'),doc=store[q[0]][q[1]];if(!doc)return;
+  var ctls=[].filter.call(el.closest('.tr').querySelectorAll('[data-l]'),function(x){return x.dataset.l.split('|').length===5}),c0=ctls.indexOf(el);if(c0<0)return;
+  var lab=function(x){return String(x.getAttribute('aria-label')||'').replace(/, row \d+$/,'').trim().toLowerCase()};
+  if(grid.length>1&&grid[0].every(function(v,j){var c=ctls[c0+j];return !v.trim()||(c&&lab(c)===v.trim().toLowerCase())}))grid.shift();
+  var arr=get(doc,q[2]);if(!Array.isArray(arr)){arr=[];setp(doc,q[2],arr)}
+  var start=+q[3],n=0,cut=0;
+  grid.forEach(function(r,ri){if(r.every(function(v){return !v.trim()}))return;var i=start+ri;while(arr.length<=i)arr.push({});
+    r.forEach(function(v,j){var c=ctls[c0+j];if(!c){cut++;return}var k=c.dataset.l.split('|')[4];arr[i][k]=pasteVal(c,v);
+      if(k==='done')arr[i].doneOn=arr[i].done?today():'';if(/(^|\.)sched$/.test(q[2])&&/^(from|to|dur)$/.test(k))triangle(arr[i],k)});n++});
+  if(!(q[0]==='single'&&q[2]==='top3'))setp(doc,q[2],arr.filter(function(r){return !blank(r)}));save(q[0],q[1]);render();
+  toast('Pasted '+n+(n===1?' row':' rows')+(cut?'. Some columns did not fit and were left out.':''))});
 document.addEventListener('submit',function(e){
   var prf=e.target.closest('form[data-prio]');if(prf){e.preventDefault();var pri=prf.querySelector('input'),ptx=pri.value.trim();if(!ptx)return;var prow=addOwn(ptx,{pri:true});pri.value='';render(pri.dataset.k);
     toast('Priority added',function(){var L=single('actions').list,j=L.indexOf(prow);if(j>=0){L.splice(j,1);save('single','actions');render()}});return}
