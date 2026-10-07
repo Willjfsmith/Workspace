@@ -735,6 +735,8 @@ li:hover > .aupdb,.aupdb:focus-visible{opacity:1}
 .ptrow{display:flex; flex-wrap:wrap; gap:4px 14px; align-items:center; padding:6px 9px; border-top:1px solid var(--rule); font-size:.85rem}
 .ptrow .lab{width:110px; color:var(--muted); font-size:.78rem}
 .ptck{display:inline-flex; gap:5px; align-items:center; cursor:pointer}
+.rtl .rtgh{font-size:.72rem; font-weight:600; letter-spacing:.03em; text-transform:uppercase; color:var(--muted); padding:10px 9px 3px; background:var(--rail)}
+.rtl .rtgh:first-child{padding-top:6px}
 </style>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
 <script src="firebase-config.js"></script>
@@ -782,6 +784,10 @@ var PHASES=['','Proposal','Concept','Prefeasibility','Feasibility','Detail engin
 var BDST=[['','Lead'],['proposal','Proposal'],['submitted','Submitted'],['won','Won'],['lost','Lost']];
 var IMPST=[['','Idea'],['doing','In progress'],['done','Done']];
 var KICKOFF=["Read the contract scope, exclusions and client standards","Agree the design criteria and codes with the Project Manager and client","Build the deliverables register with hours and dates for every item","Confirm drawing numbering, revision and document control procedures","Name the lead, the checker and the approver for each discipline","List long-lead equipment and the vendor data each drawing depends on","Schedule design reviews, HAZOP and the model review dates","Hold a kickoff with engineers and drafters together, with a site visit or photos"];
+var ONBOARD=["Laptop, logins, email and access cards ready before day one","Office and site inductions booked","Introduce the team and a go-to buddy","Walk through current projects and where files live","Explain drawing standards, numbering and the checking process","Agree first tasks and a 30-day plan","Book a check-in for the end of week one"];
+var CLOSEOUT=["All deliverables issued at final revision","Document register and transmittals closed out","Final hours and cost against budget recorded","Open actions, holds and changes closed or handed over","Lessons learned added to the wiki","Client feedback asked for","Files archived and access tidied up"];
+var PRESITE=["Site induction current and PPE packed","Access, permits and escort arranged","Latest drawings and a list of questions ready","Camera or tablet charged","Know who you are meeting and their number","Someone knows where you are and when you will be back"];
+var MORECK=[{id:'onboard',name:'New starter onboarding',items:ONBOARD},{id:'presite',name:'Before a site visit',items:PRESITE},{id:'closeout',name:'Project close-out',items:CLOSEOUT}];
 var IFC=["Design criteria met and deviations approved in writing","Calculations checked and filed","Certified vendor data incorporated, or holds clearly marked","Interdisciplinary check complete and clashes resolved","HAZOP, safety in design and constructability actions closed","Drawings checked for dimensions, buildability, completeness and clarity","Signatures complete: designer, checker, discipline engineer, engineering manager, Project Manager","Client approval received and recorded"];
 var OPTREF={BDST:BDST,IMPST:IMPST,OUTCOME:[['',''],['proceed','Proceed'],['actions','Proceed with actions'],['again','Review again']]};
 function resolveOpts(o){if(o.optsRef)return OPTREF[o.optsRef]||[];if(o.choices)return [['','']].concat(o.choices.map(function(c){return [c,c]}));return typeof o.opts==='function'?o.opts():(o.opts||[])}
@@ -798,7 +804,7 @@ function remember(){try{localStorage.setItem('lw.ui',JSON.stringify({v:ui.v,id:u
 var DEF={dash:function(){return {top3:[],tl:{},notes:'',follow:[],changes:[],rem:[]}},sched:function(){return {title:'',start:'',rows:[]}},
   bd:function(){return {pipeline:[],notes:''}},office:function(){return {items:[],improve:[],notes:''}},actions:function(){return {list:[]}},
   layouts:function(){return {L:{},pages:[]}},
-  settings:function(){return {checklists:[{id:'kickoff',name:'Project kickoff',items:asItems(KICKOFF)},{id:'ifc',name:'Issue for construction',items:asItems(IFC)}]}}};
+  settings:function(){return {ckAdded:2,checklists:[{id:'kickoff',name:'Project kickoff',items:asItems(KICKOFF)},{id:'ifc',name:'Issue for construction',items:asItems(IFC)}].concat(MORECK.map(function(c){return {id:c.id,name:c.name,items:asItems(c.items)}}))}}};
 function single(id){if(!store.single[id])store.single[id]=(DEF[id]||function(){return {}})();return store.single[id]}
 function templates(){var s=single('settings');if(!Array.isArray(s.checklists))s.checklists=[];return s.checklists}
 function fromTemplate(t){return {name:t.name,items:(t.items||[]).filter(function(i){return i.t}).map(function(i){return {t:i.t,done:false,note:''}})}}
@@ -839,7 +845,9 @@ function moveChecks(){var tp=templates();Object.keys(store.projects).forEach(fun
   delete p.checks;save('projects',pid,true)})}
 function markOldFiled(){var st=single('settings');if(st.unfiledFrom)return;var n=0;Object.keys(store.records).forEach(function(id){var r=store.records[id];if(r&&!r.project&&!r.person&&!r.filed){r.filed=true;save('records',id,true);n++}});st.unfiledFrom=today();save('single','settings',true)}
 function typeProjects(){Object.keys(store.projects).forEach(function(id){var pj=store.projects[id];if(pj&&!pj.ptype){pj.ptype=pj.scope==='internal'?'internal':'client';save('projects',id,true)}})}
-function migrate(){mergeLists();typeProjects();markOldFiled();moveChecks();Object.keys(store.records).forEach(function(id){var r=store.records[id];if(r&&'folder' in r){if(r.folder&&!r.project)r.project=internalProject(r.folder);delete r.folder;save('records',id,true)}});var dt=store.single.dash;if(dt&&Array.isArray(dt.top3)&&dt.top3.some(function(r){return r&&r.t})){dt.top3.forEach(function(r){if(r&&r.t)single('actions').list.push({t:r.t,pri:true,done:!!r.done,kind:''})});dt.top3=[];save('single','dash',true);save('single','actions',true)}Object.keys(store.projects).forEach(function(id){if(convSched(store.projects[id]))save('projects',id,true)});var d=store.single.dash;if(d&&Array.isArray(d.props)&&d.props.length){var bd=single('bd');
+function addChecklists(){var st=single('settings');if(st.ckAdded>=2)return;var have={};templates().forEach(function(t){have[String(t.name||'').toLowerCase()]=1;if(t.id)have[t.id]=1});
+  MORECK.forEach(function(c){if(!have[c.id]&&!have[c.name.toLowerCase()])templates().push({id:c.id,name:c.name,items:asItems(c.items)})});st.ckAdded=2;save('single','settings',true)}
+function migrate(){mergeLists();addChecklists();typeProjects();markOldFiled();moveChecks();Object.keys(store.records).forEach(function(id){var r=store.records[id];if(r&&'folder' in r){if(r.folder&&!r.project)r.project=internalProject(r.folder);delete r.folder;save('records',id,true)}});var dt=store.single.dash;if(dt&&Array.isArray(dt.top3)&&dt.top3.some(function(r){return r&&r.t})){dt.top3.forEach(function(r){if(r&&r.t)single('actions').list.push({t:r.t,pri:true,done:!!r.done,kind:''})});dt.top3=[];save('single','dash',true);save('single','actions',true)}Object.keys(store.projects).forEach(function(id){if(convSched(store.projects[id]))save('projects',id,true)});var d=store.single.dash;if(d&&Array.isArray(d.props)&&d.props.length){var bd=single('bd');
     d.props.forEach(function(r){if(r&&r.t)bd.pipeline.push({opp:r.t})});delete d.props;save('single','dash',true);save('single','bd',true)}}
 function status(){var el=document.getElementById('status');if(!el)return;
   el.className=mode==='local'?'warn':'';
@@ -1011,6 +1019,8 @@ var OFFICE=[L(null,T('items','Team and business actions',[{k:'done',type:'check'
   L(null,R('notes','Notes',null,160))];
 /* dated records: the forms that get created and filed */
 var CKCOLS=[{k:'done',type:'check',w:'34px',label:'Done',rr:1},{k:'t',label:'Check',w:'2fr'},{k:'note',label:'Note'}];
+var RGROUPS=[['notes','Notes and meetings',['meeting','call','general','sketch']],['project','Projects and design',['pcheck','decision','brief','options','calc','review','proposal']],
+  ['site','Site',['site','siteday']],['people','People',['scheck','interview']]];
 var FORMS={
   meeting:{name:'Meeting notes',title:'Meeting',rows:[L(null,A('attendees','Attendees',2)),L(null,R('notes','Notes',null,240)),L(null,ACTIONS()),L(null,FILES('Attachments'))]},
   general:{name:'General notes',title:'Subject',rows:[L(null,R('notes','Notes',null,360))]},
@@ -1035,6 +1045,16 @@ var FORMS={
   site:{name:'Site visit and inspection',title:'Location or vendor',link:'project',rows:[L(null,KV('info','Visit',[['purpose','Purpose'],['present','Present']])),
     L(null,T('obs','Observations',[{k:'t',label:'Observation',type:'area',w:'2.4fr'},{k:'photo',label:'Photo ref',w:'.6fr'}])),L(null,FILES('Photos and files')),L(null,R('notes','Notes',null,120)),L(null,ACTIONS('Punch items and actions'))]},
   checklist:{name:'Checklist',title:'Name',rows:[L(null,T('items','Checks',CKCOLS,{wide:1})),L(null,R('notes','Notes',null,120))]},
+  call:{name:'Phone call',title:'With',rows:[L(null,A('summary','Summary',2,'Shows in the record list')),L(null,R('notes','Notes',null,160)),L(null,ACTIONS())]},
+  decision:{name:'Decision record',title:'Decision',link:'project',rows:[L(null,A('summary','What was decided',2,'Shows in the record list')),L(null,A('context','Context and why a decision was needed',3)),
+    L(null,T('opts','Options considered',[{k:'opt',label:'Option',w:'1.2fr'},{k:'pro',label:'For',type:'area',w:'1.4fr'},{k:'con',label:'Against',type:'area',w:'1.4fr'}],{wide:1})),
+    L([1.3,1],A('why','Why this option',3),KV('who','Sign-off',[['by','Decided by'],['with','Consulted'],['review','Review by','date']])),L(null,ACTIONS())]},
+  siteday:{name:'Site diary',title:'Day',link:'project',rows:[L(null,KV('cond','Conditions',[['weather','Weather'],['ground','Ground conditions'],['hours','Hours worked']])),
+    L(null,T('onsite','On site',[{k:'crew',label:'Contractor or crew',w:'1.3fr'},{k:'n',label:'Headcount',type:'num',w:'.5fr'},{k:'work',label:'Work done',type:'area',w:'2fr'}],{wide:1})),
+    L(null,A('issues','Issues, delays, visitors and instructions',3)),L(null,FILES('Photos')),L(null,ACTIONS())]},
+  interview:{name:'Interview notes',title:'Candidate',rows:[L(null,KV('info','Interview',[['role','Role'],['panel','Panel'],['source','How they applied']])),
+    L(null,T('qs','Questions',[{k:'q',label:'Question',w:'1.2fr'},{k:'a',label:'Answer and evidence',type:'area',w:'2fr'},{k:'score',label:'Score',w:'.45fr'}],{wide:1})),
+    L([1,1],A('strengths','Strengths',3),A('concerns','Concerns',3)),L(null,A('summary','Recommendation',2,'Shows in the record list'))]},
   proposal:{name:'Proposal notes',title:'Opportunity',rows:[L(null,KV('info','Opportunity',[['client','Client'],['contact','Contact'],['phase','Phase or type'],['due','Due','date']])),L(null,A('scope','Scope summary',3)),
     L(null,T('deliv','Deliverables and hours',[{k:'t',label:'Deliverable',w:'2fr'},{k:'qty',label:'Qty',type:'num',w:'.4fr'},{k:'eng',label:'Engineering hrs',type:'num',w:'.6fr'},{k:'dft',label:'Drafting hrs',type:'num',w:'.6fr'},{k:'tot',label:'Total hrs',type:'num',w:'.6fr'}],{wide:1})),
     L([1,1],A('clar','Clarifications',4),A('excl','Exclusions',4)),L(null,A('risks','Risks and unknowns',3)),L(null,TICKS('next','Next steps'))]}
@@ -1075,7 +1095,18 @@ function formOn(k){return !rtSet().formOff[k]}
 function formDef(type){var F=FORMS[type];if(F)return {name:recName(type),title:F.title,rows:getLayout('f_'+type).rows,lid:'f_'+type};
   var pg=pages('form').filter(function(p){return 'c_'+p.id===type})[0];if(pg)return {name:pg.name||'Custom form',title:'Title',rows:getLayout(type).rows,lid:type};
   return {name:'Record',title:'Title',rows:[],lid:null}}
-function formOpts(){var ck=recName('checklist');return Object.keys(FORMS).filter(function(k){return k!=='checklist'&&formOn(k)}).map(function(k){return [k,recName(k)]})
+/* the record types offered when creating a record, grouped and ordered */
+function formGroups(){var ck=recName('checklist'),seen={},out=[];
+  RGROUPS.forEach(function(g){var items=g[2].filter(function(k){seen[k]=1;return FORMS[k]&&formOn(k)}).map(function(k){return [k,recName(k)]});
+    pages('form').forEach(function(pg){if(!pg.off&&pg.grp===g[0])items.push(['c_'+pg.id,pg.name||'Custom form'])});if(items.length)out.push({group:g[1],items:items})});
+  var rest=Object.keys(FORMS).filter(function(k){return !seen[k]&&k!=='checklist'&&formOn(k)}).map(function(k){return [k,recName(k)]});
+  var cks=templates().map(function(t,i){return t.off?null:['checklist:'+i,t.name||'Untitled']}).filter(Boolean).concat(formOn('checklist')?[['checklist','Blank '+ck.toLowerCase()]]:[]);
+  if(cks.length)out.push({group:ck+'s',items:cks});
+  var mine=rest.concat(pages('form').filter(function(pg){return !pg.off&&!RGROUPS.some(function(g){return g[0]===pg.grp})}).map(function(pg){return ['c_'+pg.id,pg.name||'Custom form']}));
+  if(mine.length)out.push({group:'Your types',items:mine});
+  return out}
+function formOpts(){return [].concat.apply([],formGroups().map(function(g){return g.items}))}
+function formOptsOld(){var ck=recName('checklist');return Object.keys(FORMS).filter(function(k){return k!=='checklist'&&formOn(k)}).map(function(k){return [k,recName(k)]})
   .concat(templates().map(function(t,i){return t.off?null:['checklist:'+i,ck+': '+(t.name||'Untitled')]}).filter(Boolean),formOn('checklist')?[['checklist',ck+': blank']]:[]).concat(pages('form').filter(function(p){return !p.off}).map(function(p){return ['c_'+p.id,p.name||'Custom form']}))}
 function newRecord(type,project,person){var r={type:type,title:'',date:today(),project:project||'',person:person||'',ts:Date.now(),d:{}};
   if(type.indexOf('checklist:')===0){var t=templates()[+type.slice(10)];r.type='checklist';if(t){r.title=t.name||'';r.d.items=fromTemplate(t).items}}
@@ -1335,7 +1366,7 @@ function recordList(filter,emptyMsg){
   return '<ul class="list">'+recs.map(function(x){var r=x.d,p=store.projects[r.project],e=store.people[r.person],sum=recSummary(r);
     return '<li><span class="d">'+fmtL(r.date)+'</span><button class="link" data-go="record" data-id="'+x.id+'">'+esc(r.title||'Untitled')+'</button><span class="k">'+esc(formDef(r.type).name)+'</span>'
       +(sum?'<span>'+esc(sum)+'</span>':'')+'<span class="sp"></span><span class="k">'+esc([p&&p.name,e&&e.name].filter(Boolean).join(', '))+'</span></li>'}).join('')+'</ul>'}
-function newRecordCtl(project,person,folder){return '<select class="newrec" data-newrec="1" data-project="'+(project||'')+'" data-person="'+(person||'')+'" data-folder="'+esc(folder||'')+'" aria-label="New record">'+opts([['','New record\u2026']].concat(formOpts()),'')+'</select>'}
+function newRecordCtl(project,person,folder){return '<select class="newrec" data-newrec="1" data-project="'+(project||'')+'" data-person="'+(person||'')+'" data-folder="'+esc(folder||'')+'" aria-label="New record">'+opts([['','New record\u2026']].concat(formGroups()),'')+'</select>'}
 var V={};
 var SPECIAL={
   timeline:{web:function(b,fk){var ms=timeline(),kd=keyDates(),t=today();
@@ -1691,12 +1722,12 @@ var ICON={home:ICO('<path d="M4 11l8-6 8 6v8a1 1 0 0 1-1 1h-4v-6H9v6H5a1 1 0 0 1
 function tabbar(){var tb=document.getElementById('tabbar');if(!tb)return;var on=function(v){return (ui.v===v||(v==='projects'&&ui.v==='project')||(v==='team'&&/^(person|people|office)$/.test(ui.v)))?' aria-current="page"':''};
   var B=function(v,l,ic){return '<button data-go="'+v+'"'+on(v)+'>'+ic+'<span>'+l+'</span></button>'};
   tb.innerHTML=B('dash','Home',ICON.home)+B('week','Week',ICON.week)+'<button class="plus" data-act="capsheet" aria-label="Add an item">'+ICON.plus+'</button>'+B('projects','Projects',ICON.proj)+B('team','Team',ICON.ppl)}
-var QUICKREC=['meeting','general','sketch','site'];
-function openSheet(){var s=document.getElementById('capsheet'),fo=formOpts();
+var QUICKREC=['meeting','call','general','site'];
+function openSheet(){var s=document.getElementById('capsheet'),fo=formGroups().map(function(g){return {group:g.group,items:g.items.filter(function(o){return QUICKREC.indexOf(o[0])<0})}}).filter(function(g){return g.items.length});
   s.innerHTML=capForm('capsheet|text','New item')+'<div class="eline"><span class="meta">Items that include a name or date become actions. Other items go to the inbox.</span></div>'
     +'<div class="capnew"><div class="capnh">New record <span class="meta">goes to the inbox until you file it</span></div><div class="capnb">'
     +QUICKREC.filter(function(k){return FORMS[k]&&formOn(k)}).map(function(k){return '<button class="btn" data-act="capnew" data-type="'+k+'">'+esc(recName(k))+'</button>'}).join('')
-    +'<select class="newrec" data-capnew="1" aria-label="Other record types">'+opts([['','Other\u2026']].concat(fo.filter(function(o){return QUICKREC.indexOf(o[0])<0})),'')+'</select></div></div>'
+    +'<select class="newrec" data-capnew="1" aria-label="Other record types">'+opts([['','Other\u2026']].concat(fo),'')+'</select></div></div>'
     +'<div class="eline"><span class="sp"></span><button class="mini" data-act="capclose">Cancel</button></div>';
   s.classList.add('on');document.documentElement.classList.add('sheet-open');var i=s.querySelector('input');if(i)i.focus()}
 function closeSheet(){var s=document.getElementById('capsheet');s.classList.remove('on');s.innerHTML='';document.documentElement.classList.remove('sheet-open')}
@@ -1891,10 +1922,13 @@ V.rtypes=function(){var head='<div class="head"><h1>Record templates</h1><span c
   var cnt={};Object.keys(store.records).forEach(function(id){var t=store.records[id].type;cnt[t]=(cnt[t]||0)+1});
   var nrec=function(n){return n?n+(n===1?' record':' records'):'No records yet'};
   var onBox=function(key,on){return '<label class="ptck" title="Offer it in the New record menus"><input type="checkbox" data-rton="'+key+'"'+(on?' checked':'')+'> In menus</label>'};
-  var all=pages(),forms=Object.keys(FORMS).map(function(k){return '<li><input class="ein" data-b="single|settings|formNames.'+k+'" data-k="rtn|'+k+'" data-rr="1" value="'+esc(recName(k))+'" placeholder="'+esc(FORMS[k].name)+'" aria-label="Name for '+esc(FORMS[k].name)+'" style="flex:0 1 240px">'
+  var all=pages(),gsel=function(i,v){return '<select class="newrec" data-b="single|layouts|pages.'+i+'.grp" data-k="rtg|'+i+'" data-rr="1" aria-label="Group">'+opts(RGROUPS.map(function(g){return [g[0],g[1]]}).concat([['','Your types']]),v||'')+'</select>'};
+  var order=[].concat.apply([],RGROUPS.map(function(g){return g[2]})).concat(Object.keys(FORMS).filter(function(k){return k!=='checklist'&&!RGROUPS.some(function(g){return g[2].indexOf(k)>=0})})).concat(['checklist']);
+  var gh=function(k){var g=RGROUPS.filter(function(x){return x[2][0]===k})[0];return g?'<li class="rtgh">'+esc(g[1])+'</li>':k==='checklist'?'<li class="rtgh">'+esc(recName('checklist'))+'s</li>':''};
+  var forms=order.filter(function(k){return FORMS[k]}).map(function(k){return gh(k)+'<li><input class="ein" data-b="single|settings|formNames.'+k+'" data-k="rtn|'+k+'" data-rr="1" value="'+esc(recName(k))+'" placeholder="'+esc(FORMS[k].name)+'" aria-label="Name for '+esc(FORMS[k].name)+'" style="flex:0 1 240px">'
         +'<span class="k">Built in'+(k==='checklist'?', the blank checklist':'')+' \u00B7 '+nrec(cnt[k])+'</span><span class="sp"></span>'+onBox('f|'+k,formOn(k))+'<button class="mini" data-act="edit" data-lid="f_'+k+'">Edit layout</button></li>'}).join('')
-    +all.map(function(p,i){if(p.scope!=='form')return '';var nk='single|layouts|pages.'+i+'.name';
-      return '<li><input class="ein" data-b="'+nk+'" data-k="'+nk+'" data-rr="1" value="'+esc(p.name)+'" placeholder="Name" aria-label="Name" style="flex:0 1 240px"><span class="k">Yours \u00B7 '+nrec(cnt['c_'+p.id])+'</span><span class="sp"></span>'
+    +(all.some(function(p){return p.scope==='form'})?'<li class="rtgh">Your types</li>':'')+all.map(function(p,i){if(p.scope!=='form')return '';var nk='single|layouts|pages.'+i+'.name';
+      return '<li><input class="ein" data-b="'+nk+'" data-k="'+nk+'" data-rr="1" value="'+esc(p.name)+'" placeholder="Name" aria-label="Name" style="flex:0 1 240px"><span class="k">Yours \u00B7 '+nrec(cnt['c_'+p.id])+'</span><span class="sp"></span>'+gsel(i,p.grp)
         +onBox('c|'+i,!p.off)+'<button class="mini" data-act="edit" data-lid="c_'+p.id+'">Edit layout</button><button class="mini" data-act="rmpage" data-i="'+i+'">'+(ui.confirm==='pg'+i?'Confirm remove':'Remove')+'</button></li>'}).join('');
   var tp=templates();
   return head+'<p class="meta" style="margin:-4px 0 10px">Every type of record you can create. Rename them, change their layout, take them out of the New record menus, or add your own. Records already made keep their content.</p>'
@@ -2377,7 +2411,7 @@ function render(focusKey){
   var nIn=inboxItems().length+unfiled().length,moreOpen=/^(reset|dump|archive|rtypes)$/.test(ui.v)||ui.railMore;
   var R=function(v,l,n,on){return '<button data-go="'+v+'"'+(on||cur(v))+'>'+l+(n?'<span class="n">'+n+'</span>':'')+'</button>'};
   rail.innerHTML='<div class="brand">'+LOGO+'Workspace</div><input type="search" data-search="1" data-k="search" placeholder="Search" aria-label="Search the workspace" value="'+esc(ui.q)+'">'
-    +'<select class="newsel" data-new="1" data-k="newsel" aria-label="Create something new"><option value="">New\u2026</option><option value="action">Action</option><option value="project">Project</option><option value="person">Person</option><optgroup label="Record">'+formOpts().map(function(o){return '<option value="r:'+esc(o[0])+'">'+esc(o[1])+'</option>'}).join('')+'</optgroup></select>'
+    +'<select class="newsel" data-new="1" data-k="newsel" aria-label="Create something new"><option value="">New\u2026</option><option value="action">Action</option><option value="project">Project</option><option value="person">Person</option>'+formGroups().map(function(g){return '<optgroup label="'+esc(g.group)+'">'+g.items.map(function(o){return '<option value="r:'+esc(o[0])+'">'+esc(o[1])+'</option>'}).join('')+'</optgroup>'}).join('')+'</select>'
     +R('dash','Dashboard')+R('inbox','Inbox',nIn)+R('actions','Actions',openA)+R('week','Week',0,ui.v==='week'||ui.v==='today'?' aria-current="page"':'')+R('gsched','Schedule')+R('sched','Resourcing')+R('records','Records',nRec,ui.v==='records'||ui.v==='record'?' aria-current="page"':'')+R('bd','Business development')+R('team','Team',0,/^(team|office|people)$/.test(ui.v)?' aria-current="page"':'')
     +'<div class="sec"><button class="secb" data-go="projects">Projects</button></div>'+(function(){var sp=projSplit(),pb=function(x){return '<button data-go="project" data-id="'+x.id+'"'+cur('project',x.id)+'>'+mark(x.d.status)+'<span style="overflow:hidden;text-overflow:ellipsis">'+esc(x.d.name||'Untitled project')+'</span></button>'};
       return sp.ext.map(pb).join('')+(sp.int.length?'<div class="subsec">Internal</div>'+sp.int.map(pb).join(''):'')})()+'<button class="new" data-act="new" data-kind="projects">+ New project</button>'
