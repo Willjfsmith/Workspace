@@ -3,10 +3,15 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover">
-<title>Lead workspace</title>
+<title>Workspace</title>
+<link rel="icon" href="icons/logo.svg" type="image/svg+xml">
+<link rel="icon" href="icons/favicon-32.png" sizes="32x32" type="image/png">
+<link rel="apple-touch-icon" href="icons/icon-180.png">
+<link rel="manifest" href="manifest.webmanifest">
+<meta name="theme-color" content="#111111">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="mobile-web-app-capable" content="yes">
-<meta name="apple-mobile-web-app-title" content="Lead workspace">
+<meta name="apple-mobile-web-app-title" content="Workspace">
 <link href="https://fonts.googleapis.com/css2?family=Barlow:wght@400;500;600&family=Barlow+Condensed:wght@500;600&display=swap" rel="stylesheet">
 <style>
 :root{
@@ -689,6 +694,11 @@ body{align-content:start}
 .gz.l{left:-4px} .gz.r{right:-4px}
 .gbar.drag,.gms.drag{opacity:.7; cursor:grabbing; outline:2px solid var(--ink); outline-offset:1px}
 body.gdragging{cursor:grabbing; user-select:none; -webkit-user-select:none}
+/* ---- logo ---- */
+.logo{width:1.35em; height:1.35em; flex:none; vertical-align:-.3em; margin-right:.45em}
+.logo .lt{fill:var(--ink)} .logo .lb{fill:var(--sheet)} .logo .ll{fill:#E5483D}
+#rail .brand{display:flex; align-items:center}
+#topbar .tt{display:inline-flex; align-items:center}
 </style>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
 <script src="firebase-config.js"></script>
@@ -702,7 +712,7 @@ body.gdragging{cursor:grabbing; user-select:none; -webkit-user-select:none}
 </head>
 <body>
 <nav id="rail" aria-label="Workspace"></nav>
-<header id="topbar"><button data-act="menu" aria-label="Open the menu">Menu</button><span class="tt">Lead workspace</span><button data-act="msearch">Search</button></header>
+<header id="topbar"><button data-act="menu" aria-label="Open the menu">Menu</button><span class="tt"><svg class="logo" viewBox="0 0 64 64" aria-hidden="true"><rect class="lt" width="64" height="64" rx="14"/><rect class="lb" x="13" y="16" width="22" height="7" rx="3.5"/><rect class="lb" x="21" y="28.5" width="30" height="7" rx="3.5"/><rect class="lb" x="13" y="41" width="15" height="7" rx="3.5"/><rect class="ll" x="41.25" y="11" width="2.5" height="42" rx="1.25"/></svg>Workspace</span><button data-act="msearch">Search</button></header>
 <main id="view"></main>
 <div id="inkfs" role="dialog" aria-label="Handwriting page"></div>
 <div id="lb" role="dialog" aria-label="Photo viewer"></div>
@@ -1302,6 +1312,7 @@ var plain=function(h){return String(h||'').replace(/<(br|\/div|\/p|\/li)[^>]*>/g
 /* ---- this device ---- */
 var DEV=(function(){try{var v=localStorage.getItem('lw.dev');if(!v){v=newId();localStorage.setItem('lw.dev',v)}return v}catch(e){return 'x'}})();
 var narrow=function(){try{return matchMedia('(max-width:600px)').matches}catch(e){return false}};
+var LOGO='<svg class="logo" viewBox="0 0 64 64" aria-hidden="true"><rect class="lt" width="64" height="64" rx="14"/><rect class="lb" x="13" y="16" width="22" height="7" rx="3.5"/><rect class="lb" x="21" y="28.5" width="30" height="7" rx="3.5"/><rect class="lb" x="13" y="41" width="15" height="7" rx="3.5"/><rect class="ll" x="41.25" y="11" width="2.5" height="42" rx="1.25"/></svg>';
 var DEVNAME=(function(){var coarse=!!(window.matchMedia&&matchMedia('(pointer:coarse)').matches),w=Math.min(screen.width||0,screen.height||0);return !coarse?'computer':w&&w<600?'phone':'iPad'})();
 var STARTS=[['dash','Dashboard'],['dash-ink','Dashboard, ready to handwrite'],['week','This week'],['last','Wherever I left off']];
 function startPref(){try{var v=localStorage.getItem('lw.start');if(v==='today')v='dash';if(v==='today-ink')v='dash-ink';return v||(DEVNAME==='iPad'?'dash-ink':'dash')}catch(e){return 'dash'}}
@@ -1773,7 +1784,7 @@ V.settings=function(){
         ['Pencil input',IOS_STYLUS?'iPad pencil mode':(window.PointerEvent?'Standard pen and mouse mode':'Basic')],['Screen',window.innerWidth+' by '+window.innerHeight+(window.matchMedia&&matchMedia('(pointer:coarse)').matches?', touch':', mouse')]]
         .map(function(r){return '<div class="tr"><div class="lab">'+r[0]+'</div><div class="ro">'+r[1]+'</div></div>'}).join('')+'</div>','What this page can reach on this device')+'</div>'
     +'<div class="g">'+box('Built-in layouts','<p class="empty">To change a built-in page, open it and choose Edit layout: the project sheet and wiki from any project, the person sheet from any person, a record form from any record of that type.</p>')+'</div>'
-    +'<div class="g">'+box('Backup','<p class="empty">'+bkLine()+'</p><p class="empty">Back up as Word writes one Word document per project, person, record and workspace page into a folder you choose, replacing the previous copies. Make a folder of its own for it, such as OneDrive\\Lead workspace backup: the browser will not write straight into Downloads, Documents or Desktop. It includes the restore file. Download backup saves just the restore file. Restoring replaces what is here with the file\'s contents.</p><div class="head" style="padding:0 9px 10px;margin:0"><button class="btn pri" data-act="wordbk">Back up as Word</button>'+(window.showDirectoryPicker?'<button class="btn" data-act="wordbkdir">Choose a different folder</button>':'')+'<button class="btn" data-act="backup">Download backup</button>'
+    +'<div class="g">'+box('Backup','<p class="empty">'+bkLine()+'</p><p class="empty">Back up as Word writes one Word document per project, person, record and workspace page into a folder you choose, replacing the previous copies. Make a folder of its own for it, such as OneDrive\\Workspace backup: the browser will not write straight into Downloads, Documents or Desktop. It includes the restore file. Download backup saves just the restore file. Restoring replaces what is here with the file\'s contents.</p><div class="head" style="padding:0 9px 10px;margin:0"><button class="btn pri" data-act="wordbk">Back up as Word</button>'+(window.showDirectoryPicker?'<button class="btn" data-act="wordbkdir">Choose a different folder</button>':'')+'<button class="btn" data-act="backup">Download backup</button>'
       +'<label class="btn" style="cursor:pointer">'+(ui.confirm==='restore'?'Choose the file to restore from':'Restore from backup')+'<input class="file" type="file" accept=".json,application/json" data-restore="1"></label></div>')+'</div>'
     +'<div class="head" style="margin-top:18px"><h2 style="font-size:1.3rem">Checklist templates</h2><span class="meta">Start one from a project\u2019s Checklists tab or as a new record. Editing a template does not change checklists already started.</span></div>'
     +tp.map(function(t,i){var nk='single|settings|checklists.'+i+'.name';
@@ -1959,7 +1970,7 @@ function makeDocx(m){var D=window.docx,F='Arial',INK='111111',MID='6B6B6B',RED='
     else body.push(tbl(b.cols||[{label:'',w:1}],b.rows||[]))})})});
   body.push(P(R('')));
   var foot=new D.Footer({children:[P([R('Exported '+fmtL(today())+'      Page ',{col:MID,size:16}),new D.TextRun({children:[D.PageNumber.CURRENT],color:MID,size:16,font:F}),R(' of ',{col:MID,size:16}),new D.TextRun({children:[D.PageNumber.TOTAL_PAGES],color:MID,size:16,font:F})],{align:D.AlignmentType.RIGHT})]});
-  return new D.Document({creator:'Lead workspace',title:m.title||'',styles:{default:{document:{run:{font:F,size:19,color:INK}}}},
+  return new D.Document({creator:'Workspace',title:m.title||'',styles:{default:{document:{run:{font:F,size:19,color:INK}}}},
     sections:[{properties:{page:{size:{width:11906,height:16838,orientation:land?D.PageOrientation.LANDSCAPE:D.PageOrientation.PORTRAIT},margin:{top:720,bottom:720,left:720,right:720}}},footers:{default:foot},children:body}]})}
 function exportWord(model,name){if(!model)return;toast('Preparing the Word document');
   loadDocx().then(function(){return loadPics(model)}).then(function(){return window.docx.Packer.toBlob(makeDocx(model))}).then(function(bl){return bl.arrayBuffer()})
@@ -2010,7 +2021,7 @@ function wordBackup(pick){if(bkBusy)return;bkBusy=true;var dir=null,zip=null,n=0
       if(d.text!=null)return put(d.name,new Blob([d.text],{type:'application/json'}));
       return loadPics(d.model).then(function(){return window.docx.Packer.toBlob(makeDocx(d.model))}).then(function(bl){return put(d.name,bl)})}).then(function(){n++},function(){failed.push(d.name)})});
     return chain}).then(function(){
-    if(zip)return zip.generateAsync({type:'blob'}).then(function(bl){return bl.arrayBuffer()}).then(function(buf){download('Lead workspace backup '+today()+'.zip',buf)})}).then(function(){
+    if(zip)return zip.generateAsync({type:'blob'}).then(function(bl){return bl.arrayBuffer()}).then(function(buf){download('Workspace backup '+today()+'.zip',buf)})}).then(function(){
     var st=single('settings');st.lastBackup={at:new Date().toISOString(),files:n,folder:dir?dir.name:'zip download'};save('single','settings');render();
     toast((dir?'Backed up '+n+' files to '+dir.name:'Downloaded a zip of '+n+' files')+(failed.length?'. '+failed.length+' could not be written: '+failed.slice(0,3).join(', ')+(failed.length>3?'\u2026':''):''));done()},
     function(e){done();if(e&&e.name==='AbortError')return;
@@ -2230,7 +2241,7 @@ function render(focusKey){
   var openA=allActions().filter(function(x){return !x.done}).length,nRec=Object.keys(store.records).length;
   var nIn=inboxItems().length,moreOpen=/^(reset|dump|archive)$/.test(ui.v)||ui.railMore;
   var R=function(v,l,n,on){return '<button data-go="'+v+'"'+(on||cur(v))+'>'+l+(n?'<span class="n">'+n+'</span>':'')+'</button>'};
-  rail.innerHTML='<div class="brand">Lead workspace</div><input type="search" data-search="1" data-k="search" placeholder="Search" aria-label="Search the workspace" value="'+esc(ui.q)+'">'
+  rail.innerHTML='<div class="brand">'+LOGO+'Workspace</div><input type="search" data-search="1" data-k="search" placeholder="Search" aria-label="Search the workspace" value="'+esc(ui.q)+'">'
     +'<select class="newsel" data-new="1" data-k="newsel" aria-label="Create something new"><option value="">New\u2026</option><option value="action">Action</option><option value="project">Project</option><option value="person">Person</option><optgroup label="Record">'+formOpts().map(function(o){return '<option value="r:'+esc(o[0])+'">'+esc(o[1])+'</option>'}).join('')+'</optgroup></select>'
     +R('dash','Dashboard')+R('inbox','Inbox',nIn)+R('actions','Actions',openA)+R('week','Week',0,ui.v==='week'||ui.v==='today'?' aria-current="page"':'')+R('gsched','Schedule')+R('sched','Resourcing')+R('records','Records',nRec,ui.v==='records'||ui.v==='record'?' aria-current="page"':'')+R('bd','Business development')+R('team','Team',0,/^(team|office|people)$/.test(ui.v)?' aria-current="page"':'')
     +'<div class="sec"><button class="secb" data-go="projects">Projects</button></div>'+(function(){var sp=projSplit(),pb=function(x){return '<button data-go="project" data-id="'+x.id+'"'+cur('project',x.id)+'>'+mark(x.d.status)+'<span style="overflow:hidden;text-overflow:ellipsis">'+esc(x.d.name||'Untitled project')+'</span></button>'};
@@ -2501,7 +2512,7 @@ document.addEventListener('click',function(e){
 });
 function restoreFile(el){var file=el.files&&el.files[0];if(!file)return;var rd=new FileReader();
   rd.onload=function(){var data;try{data=JSON.parse(rd.result)}catch(e){data=null}
-    if(!data||data.app!=='lead-workspace'||typeof data.projects!=='object'){toast("That file isn't a Lead workspace backup.");return}
+    if(!data||data.app!=='lead-workspace'||typeof data.projects!=='object'){toast("That file isn't a Workspace backup.");return}
     var before={};KINDS.forEach(function(k){before[k]=clone(store[k])});
     applyAll(data);moveChecks();toast('Restored from the backup',function(){applyAll(before);render()});render()};
   rd.onerror=function(){toast("That file couldn't be read.")};rd.readAsText(file)}

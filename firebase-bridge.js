@@ -1,4 +1,4 @@
-/* Connects the Lead workspace page to Firebase.
+/* Connects the Workspace page to Firebase.
    The page asks for four services through window.claude.use(name):
      db        saved entries (Cloud Firestore)
      user      who is signed in (Firebase Authentication, Google sign-in)
@@ -13,7 +13,7 @@ const ready = window.__lwReady || function () {};
 const config = window.FIREBASE_CONFIG || {};
 
 function fail(msg) {
-  console.error('[lead workspace] ' + msg);
+  console.error('[workspace] ' + msg);
   showGate(msg, false);
   ready({});
 }
@@ -31,7 +31,8 @@ function showGate(msg, withButton) {
   }
   gate.innerHTML =
     '<div style="max-width:360px;width:100%;text-align:center">' +
-    '<div style="font-family:var(--head,system-ui);font-size:28px;font-weight:600;letter-spacing:.02em;margin-bottom:10px">Lead workspace</div>' +
+    '<img src="icons/logo.svg" alt="" width="64" height="64" style="display:block;margin:0 auto 14px">' +
+    '<div style="font-family:var(--head,system-ui);font-size:28px;font-weight:600;letter-spacing:.02em;margin-bottom:10px">Workspace</div>' +
     '<p style="color:var(--muted,#666);margin:0 0 20px;line-height:1.45"></p>' +
     (withButton ? '<button type="button" style="font:inherit;font-weight:600;padding:12px 22px;border:1px solid var(--ink,#111);background:var(--ink,#111);color:var(--board,#fff);border-radius:6px;cursor:pointer">Sign in with Google</button>' : '') +
     '</div>';
@@ -181,7 +182,7 @@ async function start() {
         async delete(id) { return S.deleteObject(await fileRef(id)); },
       };
     } catch (e) {
-      console.warn('[lead workspace] photo and file uploads are off:', e);
+      console.warn('[workspace] photo and file uploads are off:', e);
     }
   }
 

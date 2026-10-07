@@ -1,4 +1,4 @@
-# Lead workspace: setup
+# Workspace: setup
 
 The app runs as a website on GitHub Pages and saves to your own Firebase project.
 You sign in with Google, and each Google account can only see its own entries.

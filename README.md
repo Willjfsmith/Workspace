@@ -1,4 +1,4 @@
-# Lead workspace
+# Workspace
 
 A personal project and team workspace, hosted on GitHub Pages and saved to Firebase.
 
