@@ -28,7 +28,7 @@ It takes about 20 minutes. You need a Google account and this GitHub repository.
 
 ## 2. Turn on Google sign-in
 
-1. In the left menu, open **Build → Authentication**, then click **Get started**.
+1. In the left menu, open **Security → Authentication** (it may also be pinned under *Project shortcuts*). On the intro page, click the orange **Get started** button.
 2. On the **Sign-in method** tab, click **Google**.
 3. Switch on **Enable**, choose your email as the **Project support email**, and click **Save**.
 4. Open the **Settings** tab, then **Authorized domains**.
@@ -50,7 +50,7 @@ These values are safe to publish. Sign-in and the security rules in step 4 prote
 
 ## 4. Create the database and lock it down
 
-1. In the left menu, open **Build → Firestore Database** and click **Create database**.
+1. In the left menu, open **Databases and storage → Firestore** and click **Create database**.
 2. Choose the **Standard** edition if Firebase asks.
 3. Pick a location close to you, for example **australia-southeast1 (Sydney)**. You can't change this later.
 4. Choose **Start in production mode**, then click **Create**.
@@ -76,7 +76,7 @@ Skip this step if you don't attach photos or files to entries. The rest of the a
 
 Firebase only offers file storage on the pay-as-you-go **Blaze** plan. Light personal use stays within the free allowance, so in practice it costs nothing.
 
-1. In the left menu, open **Build → Storage** and click **Get started**. Firebase will ask you to upgrade to **Blaze** and link a billing account.
+1. In the left menu, open **Databases and storage → Storage** and click **Get started**. Firebase will ask you to upgrade to **Blaze** and link a billing account.
    Once you've upgraded, set a budget alert (for example AU$5) under **Usage and billing → Details & settings**, so any charges are flagged early.
 2. Choose a bucket location. **us-central1**, **us-east1** and **us-west1** include the no-cost allowance.
 3. Choose **Start in production mode**, then click **Create**.
