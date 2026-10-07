@@ -1085,7 +1085,7 @@ var PT_DEFAULT=[{id:'client',name:'Client job',internal:false,fields:{client:tru
   {id:'personal',name:'Personal',internal:true,fields:{status:true},offTabs:{wiki:true,checks:true},own:'1'}];
 function ptypes(){var st=single('settings');if(!Array.isArray(st.ptypes)||!st.ptypes.length)st.ptypes=clone(PT_DEFAULT);return st.ptypes}
 function ptypeOf(p){var L=ptypes(),id=p&&p.ptype||(p&&p.scope==='internal'?'internal':'client');return L.filter(function(t){return t.id===id})[0]||L.filter(function(t){return t.id===(p&&p.scope==='internal'?'internal':'client')})[0]||L[0]}
-function ptypesBox(){var L=ptypes(),ct=pages('project'),TB=[['wiki','Project wiki'],['checks','Checklists'],['records','Records']].concat(ct.map(function(p){return ['c_'+p.id,p.name||'Untitled tab']}));
+function ptypesBox(){var L=ptypes(),ct=pages('project'),TB=[['wiki','Project wiki'],['records','Records']].concat(ct.map(function(p){return ['c_'+p.id,p.name||'Untitled tab']}));
   var used=function(t){return Object.keys(store.projects).filter(function(id){return ptypeOf(store.projects[id]).id===t.id}).length};
   return '<div class="head" style="margin-top:18px"><h2 style="font-size:1.3rem">Project types</h2><span class="meta">Each type sets which header fields and tabs a project shows, and can have its own sheet layout. Choose a project\u2019s type from its Type field.</span></div>'
     +L.map(function(t,i){var P='single|settings|ptypes.'+i+'.',n=used(t),ck=function(path,lab){var v=get(t,path);return '<label class="ptck"><input type="checkbox" data-b="'+P+path+'" data-k="'+P+path+'" data-rr="1"'+(v?' checked':'')+'> '+esc(lab)+'</label>'};
@@ -1310,7 +1310,7 @@ var SKIP={ts:1,order:1,updated:1,archived:1,type:1,project:1,person:1,id:1,s:1,o
 function search(q){q=q.trim().toLowerCase();var res=[];if(q.length<2)return res;
   function walk(o,path,cb){if(o==null)return;if(typeof o==='string'){cb(path,o)}else if(typeof o==='object')Object.keys(o).forEach(function(k){if(!SKIP[k])walk(o[k],path?path+'.'+k:k,cb)})}
   function scan(where,doc,go){var hit=0;walk(doc,'',function(path,s){if(hit>=3)return;var plain=s.indexOf('<')>=0?s.replace(/<[^>]+>/g,' '):s,i=plain.toLowerCase().indexOf(q);
-    if(i>=0){hit++;var g=clone(go);if(g.v==='project'||g.v==='person')g.tab=path.indexOf('x.')===0?'c_'+path.split('.')[1]:path.indexOf('wiki')===0?'wiki':path.indexOf('checks')===0?'checks':'sheet';
+    if(i>=0){hit++;var g=clone(go);if(g.v==='project'||g.v==='person')g.tab=path.indexOf('x.')===0?'c_'+path.split('.')[1]:path.indexOf('wiki')===0?'wiki':'sheet';
       res.push({where:where,text:(i>30?'\u2026':'')+plain.slice(Math.max(0,i-30),i+q.length+50),go:g})}})}
   ['projects','people'].forEach(function(kind){Object.keys(store[kind]).forEach(function(id){var d=store[kind][id];
     scan((kind==='projects'?'Project: ':'Person: ')+(d.name||'Untitled')+(d.archived?' (archived)':''),d,{v:kind==='projects'?'project':'person',id:id})})});
@@ -1764,25 +1764,20 @@ V.project=function(){
   var tab=function(k,l){if(!tabOn(d,k))return '';if(k!=='sheet'&&d.hideTabs&&d.hideTabs[k]&&ui.hideEdit!==id)return '';return '<button data-tab="'+k+'" aria-pressed="'+(ui.tab===k)+'">'+l+'</button>'};
   var ctabs=pages('project');if(ui.tab.indexOf('c_')===0&&!ctabs.some(function(p){return 'c_'+p.id===ui.tab}))ui.tab='sheet';
   var htabs=d.hideTabs||{},choosing=ui.hideEdit===id;if(htabs[ui.tab]&&!choosing)ui.tab='sheet';
-  var TABL=[['wiki','Project wiki'],['checks','Checklists'],['records','Records']].concat(ctabs.map(function(p){return ['c_'+p.id,p.name||'Untitled']})).filter(function(t){return tabOn(d,t[0])});
+  var TABL=[['wiki','Project wiki'],['records','Records']].concat(ctabs.map(function(p){return ['c_'+p.id,p.name||'Untitled']})).filter(function(t){return tabOn(d,t[0])});
   var pt=ptypeOf(d);if(!tabOn(d,ui.tab))ui.tab='sheet';
   var lid=ui.tab==='sheet'?sheetLid(d):ui.tab==='wiki'||ui.tab.indexOf('c_')===0?ui.tab:null;
   var HF=[];if(pt.fields.client)HF.push(['client','Client',1.4]);if(pt.fields.phase)HF.push(['phase','Phase',.9,'select',PHASES]);if(pt.fields.status)HF.push(['status','Status',.8,'select',STATUS]);HF.push(['ptype','Type',.8,'select',ptypeOpts]);
   var h='<div class="head"><h1 class="hname">'+mark(pt.fields.status?d.status:'')+' '+nameIn('projects',id,'Untitled project','Project name')+'</h1><span class="sp"></span>'+updated(d)+pdfBtn+(lid&&!ui.edit?editBtn(lid)+(ui.tab==='sheet'?'<button class="btn" data-act="edit" data-lid="own:projects:'+id+'">Add sections to this project only</button>':''):'')
     +(ui.edit?'':'<button class="btn" data-act="hideedit">Show or hide sections</button>')+'<button class="btn" data-act="archive" data-kind="projects">'+(d.archived?'Restore from archive':'Archive')+'</button><button class="btn danger" data-act="del" data-kind="projects">'+(ui.confirm==='del'?'Confirm delete':'Delete')+'</button></div>'
     +hfields('projects',id,HF)
-    +'<div class="tabs" style="margin-bottom:12px">'+tab('sheet','Project sheet')+tab('wiki','Project wiki')+tab('checks','Checklists'+(copen?' '+copen+' open':''))+tab('records','Records'+(recs?' '+recs:''))+ctabs.map(function(p){return tab('c_'+p.id,esc(p.name||'Untitled'))}).join('')+'</div>'+hideBar('projects',id,TABL);
+    +'<div class="tabs" style="margin-bottom:12px">'+tab('sheet','Project sheet')+tab('wiki','Project wiki')+tab('records','Records'+(recs?' '+recs:''))+ctabs.map(function(p){return tab('c_'+p.id,esc(p.name||'Untitled'))}).join('')+'</div>'+hideBar('projects',id,TABL);
   if(ui.edit&&lid)return h+editor(ui.edit);
   var hn=hideNote('projects',id);
   if(ui.tab==='wiki')return h+rRows('projects',id,'wiki.',getLayout('wiki').rows)+hn;
   if(ui.tab.indexOf('c_')===0)return h+(rRows('projects',id,'x.'+ui.tab.slice(2)+'.',getLayout(ui.tab).rows)||'<p class="empty">This tab has no sections yet. Choose Edit layout to add some.</p>')+hn;
   if(ui.tab==='records')return h+box('Records for this project',recordList(function(x){return x.d.project===id},'No records yet. Meeting notes, check-ins, reviews and site visits filed against this project appear here.'),'',newRecordCtl(id,''));
-  if(ui.tab==='checks')return h+(cks.length?cks.map(function(x){var c=ckCount(x.d);
-      return '<div class="g"><section class="box"><div class="bt"><button class="link" data-go="record" data-id="'+x.id+'"><b>'+esc(x.d.title||'Checklist')+'</b></button><span>'+esc(fmtL(x.d.date))+', '+c.d+' of '+c.n+' done</span>'
-        +'<span class="r"><button class="mini" data-go="record" data-id="'+x.id+'">Open record</button></span></div>'
-        +table('records',x.id,'d.items',CKCOLS,{wide:1})+'</section></div>'}).join(''):'<p class="empty">No checklists on this project yet. Start one when the stage comes up, such as kickoff or issue for construction. Each one is kept as a dated record.</p>')
-      +'<div class="head"><select data-ui="tpl" aria-label="Checklist template" style="border:1px solid var(--line);background:transparent;border-radius:3px;padding:5px 6px">'+opts(templates().map(function(t,i){return [i,t.name||'Untitled checklist']}).concat([['blank','Blank checklist']]),ui.tpl)+'</select>'
-      +'<button class="btn" data-act="addcheck">Start checklist</button><span class="sp"></span><button class="mini" data-go="settings">Edit checklist templates</button></div>';
+  if(ui.tab==='checks'){ui.tab='records';return V.project()}
   var others=Object.keys(store.projects).filter(function(x){return x!==id}).map(function(x){return [x,(store.projects[x].name||'Untitled project')+(store.projects[x].archived?' (archived)':'')]});
   var from=d.isNew?'<div class="g nop">'+box('New project','<div class="eline"><span class="meta">What kind of project?</span>'+ptypes().map(function(t){return '<button class="btn'+(pt.id===t.id?' pri':'')+'" data-act="setptype" data-pt="'+t.id+'">'+esc(t.name||'Untitled type')+'</button>'}).join('')+'</div>'
     +(others.length?'<div class="eline"><select class="ein" data-ui="from" aria-label="Project to copy from">'+opts(others,ui.from||others[0][0])+'</select><button class="btn" data-act="copyfrom">Copy its wiki, team and type</button></div>':'')
@@ -1907,7 +1902,7 @@ V.settings=function(){
     +'<div class="g">'+box('Backup','<p class="empty">'+bkLine()+'</p><p class="empty">Back up as Word writes one Word document per project, person, record and workspace page into a folder you choose, replacing the previous copies. Make a folder of its own for it, such as OneDrive\\Workspace backup: the browser will not write straight into Downloads, Documents or Desktop. It includes the restore file. Download backup saves just the restore file. Restoring replaces what is here with the file\'s contents.</p><div class="head" style="padding:0 9px 10px;margin:0"><button class="btn pri" data-act="wordbk">Back up as Word</button>'+(window.showDirectoryPicker?'<button class="btn" data-act="wordbkdir">Choose a different folder</button>':'')+'<button class="btn" data-act="backup">Download backup</button>'
       +'<label class="btn" style="cursor:pointer">'+(ui.confirm==='restore'?'Choose the file to restore from':'Restore from backup')+'<input class="file" type="file" accept=".json,application/json" data-restore="1"></label></div>')+'</div>'
     +ptypesBox()
-    +'<div class="head" style="margin-top:18px"><h2 style="font-size:1.3rem">Checklist templates</h2><span class="meta">Start one from a project\u2019s Checklists tab or as a new record. Editing a template does not change checklists already started.</span></div>'
+    +'<div class="head" style="margin-top:18px"><h2 style="font-size:1.3rem">Checklist templates</h2><span class="meta">Start one as a record: New record \u2192 Checklist, from a project\u2019s Records tab, the + button or the New menu. Editing a template does not change checklists already started.</span></div>'
     +tp.map(function(t,i){var nk='single|settings|checklists.'+i+'.name';
       return '<div class="g"><section class="box"><div class="bt"><input data-b="'+nk+'" data-k="'+nk+'" value="'+esc(t.name)+'" placeholder="Checklist name" aria-label="Checklist name" style="border:0;background:transparent;font-weight:600;font-size:.9rem;min-width:0;flex:0 1 260px"><span class="r"><button class="mini" data-act="rmtpl" data-i="'+i+'">'+(ui.confirm==='tpl'+i?'Confirm remove':'Remove template')+'</button></span></div>'
         +table('single','settings','checklists.'+i+'.items',[{k:'t',label:'Check'}],{nohead:1})+'</section></div>'}).join('')
@@ -1935,7 +1930,7 @@ function currentModel(){var v=ui.v,d,nm;
   if(v==='project'){d=store.projects[ui.id];nm=d.name||'Untitled project';var ptm=ptypeOf(d),meta=[['Type',ptm&&ptm.name],ptm.fields.client?['Client',d.client]:['',''],ptm.fields.phase?['Phase',d.phase]:['',''],ptm.fields.status?['Status',cellText({type:'select',opts:STATUS},d.status)]:['','']].filter(function(m){return m[0]});
     if(ui.tab==='wiki')return {title:nm,kicker:'Project wiki',meta:meta,rows:mRows(d,'wiki.',getLayout('wiki').rows)};
     if(ui.tab.indexOf('c_')===0)return {title:nm,kicker:layoutInfo(ui.tab)[0],meta:meta,rows:mRows(d,'x.'+ui.tab.slice(2)+'.',getLayout(ui.tab).rows)};
-    if(ui.tab==='checks')return {title:nm,kicker:'Checklists',meta:meta,rows:projChecks(ui.id).map(function(x){return {cols:[[{t:(x.d.title||'Checklist')+', '+fmtL(x.d.date),kind:'table',cols:[{label:'',w:.12,type:'check'},{label:'Check',w:2},{label:'Note',w:1}],rows:(x.d.d&&x.d.d.items||[]).filter(function(i){return i.t}).map(function(i){return [!!i.done,i.t||'',i.note||'']})}]]}})};
+    if(ui.tab==='checks')ui.tab='records';
     if(ui.tab==='records')return {title:nm,kicker:'Records',meta:meta,rows:[{cols:[[recordsModel(function(x){return x.project===ui.id})]]}]};
     return {title:nm,kicker:'Project sheet',meta:meta,rows:mRows(d,'',getLayout(sheetLid(d)).rows).concat(mRows(d,'',(d.own||{}).rows))}}
   if(v==='person'){d=store.people[ui.id];if(ui.tab.indexOf('c_')===0)return {title:d.name||'Unnamed',kicker:layoutInfo(ui.tab)[0],meta:[['Role',d.role]],rows:mRows(d,'x.'+ui.tab.slice(2)+'.',getLayout(ui.tab).rows)};
@@ -2109,7 +2104,6 @@ function fileName(s){s=String(s||'').replace(/[\\\/:*?"<>|\u0000-\u001f]+/g,' ')
 function backupDocs(){var out=[],used={},add=function(name,model){if(!model)return;var n=fileName(name),k=n.toLowerCase(),i=2;while(used[k+'.docx']){n=fileName(name)+' ('+(i++)+')';k=n.toLowerCase()}used[k+'.docx']=1;out.push({name:n+'.docx',model:model})};
   Object.keys(store.projects).map(function(id){return {id:id,d:store.projects[id]}}).sort(function(a,b){return String(a.d.name||'').localeCompare(String(b.d.name||''))}).forEach(function(x){
     var parts=[['project',x.id,'sheet','Project sheet'],['project',x.id,'wiki','Project wiki']].concat(pages('project').map(function(pg){return ['project',x.id,'c_'+pg.id,pg.name||'Tab']}));
-    if(projChecks(x.id).length)parts.push(['project',x.id,'checks','Checklists']);
     if(Object.keys(store.records).some(function(r){return store.records[r].project===x.id}))parts.push(['project',x.id,'records','Records']);
     add('Project - '+(x.d.name||'Untitled project')+(x.d.archived?' (archived)':''),combine(parts))});
   Object.keys(store.people).map(function(id){return {id:id,d:store.people[id]}}).sort(function(a,b){return String(a.d.name||'').localeCompare(String(b.d.name||''))}).forEach(function(x){
