@@ -1773,7 +1773,7 @@ V.settings=function(){
         ['Pencil input',IOS_STYLUS?'iPad pencil mode':(window.PointerEvent?'Standard pen and mouse mode':'Basic')],['Screen',window.innerWidth+' by '+window.innerHeight+(window.matchMedia&&matchMedia('(pointer:coarse)').matches?', touch':', mouse')]]
         .map(function(r){return '<div class="tr"><div class="lab">'+r[0]+'</div><div class="ro">'+r[1]+'</div></div>'}).join('')+'</div>','What this page can reach on this device')+'</div>'
     +'<div class="g">'+box('Built-in layouts','<p class="empty">To change a built-in page, open it and choose Edit layout: the project sheet and wiki from any project, the person sheet from any person, a record form from any record of that type.</p>')+'</div>'
-    +'<div class="g">'+box('Backup','<p class="empty">A backup file holds everything in this workspace. Restoring replaces what is here with the file\'s contents.</p><div class="head" style="padding:0 9px 10px;margin:0"><button class="btn" data-act="backup">Download backup</button>'
+    +'<div class="g">'+box('Backup','<p class="empty">'+bkLine()+'</p><p class="empty">Back up as Word writes one Word document per project, person, record and workspace page into a folder you choose, such as one in OneDrive, replacing the previous copies. It includes the restore file. Download backup saves just the restore file. Restoring replaces what is here with the file\'s contents.</p><div class="head" style="padding:0 9px 10px;margin:0"><button class="btn pri" data-act="wordbk">Back up as Word</button>'+(window.showDirectoryPicker?'<button class="btn" data-act="wordbkdir">Choose a different folder</button>':'')+'<button class="btn" data-act="backup">Download backup</button>'
       +'<label class="btn" style="cursor:pointer">'+(ui.confirm==='restore'?'Choose the file to restore from':'Restore from backup')+'<input class="file" type="file" accept=".json,application/json" data-restore="1"></label></div>')+'</div>'
     +'<div class="head" style="margin-top:18px"><h2 style="font-size:1.3rem">Checklist templates</h2><span class="meta">Start one from a project\u2019s Checklists tab or as a new record. Editing a template does not change checklists already started.</span></div>'
     +tp.map(function(t,i){var nk='single|settings|checklists.'+i+'.name';
@@ -1947,7 +1947,9 @@ function makeDocx(m){var D=window.docx,F='Arial',INK='111111',MID='6B6B6B',RED='
   body.push(P(R(m.title||'',{b:true,size:36}),{after:20}));
   var sub=[m.kicker,m.sub].filter(Boolean).join('  \u00B7  ');if(sub)body.push(P(R(sub,{col:MID,size:18}),{after:100}));
   var meta=(m.meta||[]).filter(function(x){return x[1]});if(meta.length)body.push(P(meta.reduce(function(a,x,i){return a.concat([R((i?'      ':'')+x[0]+': ',{col:MID}),R(x[1],{b:true})])},[]),{after:120}));
-  (m.rows||[]).forEach(function(r){(r.cols||[]).forEach(function(col){col.forEach(function(b){if(!b)return;body.push(head(b.t||''));
+  (m.rows||[]).forEach(function(r){(r.cols||[]).forEach(function(col){col.forEach(function(b){if(!b)return;
+    if(b.kind==='part'){body.push(P(R(b.t||'',{b:true,size:30}),{before:400,after:60,keepNext:true}));return}
+    body.push(head(b.t||''));
     if(b.kind==='text'){String(b.text||'').split('\n').forEach(function(l){body.push(P(R(l)))})}
     else if(b.kind==='rich'){var bl=richBlocks(b.html||'');bl.forEach(function(x){body.push(P(x.runs.length?x.runs.map(function(q){return R(q.t,{b:q.b,i:q.i})}):[R('')],{bullet:x.bullet}))});
       if(hasInk(b.ink)){var pi=inkPng(b.ink);if(pi)body.push(P(img(pi.data,pi.w,pi.h,land?900:620)))}if(!bl.length&&!hasInk(b.ink))body.push(P(R('')))}
@@ -1963,6 +1965,56 @@ function exportWord(model,name){if(!model)return;toast('Preparing the Word docum
   loadDocx().then(function(){return loadPics(model)}).then(function(){return window.docx.Packer.toBlob(makeDocx(model))}).then(function(bl){return bl.arrayBuffer()})
   .then(function(buf){download(name||(slug((model.kicker&&model.kicker!==model.title?model.kicker+'_':'')+model.title)+'_'+today()+'.docx'),buf)},
     function(e){toast(window.docx?'That page could not be turned into a Word document.':'The Word library did not load. Check your connection and reload.')})}
+/* ---- Back up as Word: one document per project, person, record and workspace page, written flat into a folder you choose ---- */
+function bkLine(){var lb=single('settings').lastBackup;if(!lb||!lb.at)return 'Not backed up as Word yet.';var d=new Date(lb.at),days=Math.floor((Date.now()-d.getTime())/864e5);
+  return 'Last backed up '+(days<1?'today':days===1?'yesterday':days+' days ago')+', '+d.toLocaleDateString(undefined,{day:'numeric',month:'short',year:'numeric'})+': '+lb.files+' files to '+esc(lb.folder||'a folder')+'.'}
+function backupJson(){var out={app:'lead-workspace',version:2,exported:new Date().toISOString()};KINDS.forEach(function(k){out[k]=store[k]});return JSON.stringify(out,null,1)}
+function modelFor(v,id,tab){var keep={v:ui.v,id:ui.id,tab:ui.tab};ui.v=v;ui.id=id;ui.tab=tab||'sheet';try{return currentModel()}catch(e){return null}finally{ui.v=keep.v;ui.id=keep.id;ui.tab=keep.tab}}
+function combine(parts){var first=null,rows=[];parts.forEach(function(x){var m=modelFor(x[0],x[1],x[2]);if(!m)return;if(!first)first=m;
+    rows.push({cols:[[{kind:'part',t:x[3]}]]});rows=rows.concat(m.rows||[])});
+  return first?{title:first.title,meta:first.meta,sub:'Backed up '+fmtL(today()),rows:rows}:null}
+function fileName(s){s=String(s||'').replace(/[\\\/:*?"<>|\u0000-\u001f]+/g,' ').replace(/\s+/g,' ').trim();if(s.length>150)s=s.slice(0,150).trim();return s.replace(/[. ]+$/,'')||'Untitled'}
+function backupDocs(){var out=[],used={},add=function(name,model){if(!model)return;var n=fileName(name),k=n.toLowerCase(),i=2;while(used[k+'.docx']){n=fileName(name)+' ('+(i++)+')';k=n.toLowerCase()}used[k+'.docx']=1;out.push({name:n+'.docx',model:model})};
+  Object.keys(store.projects).map(function(id){return {id:id,d:store.projects[id]}}).sort(function(a,b){return String(a.d.name||'').localeCompare(String(b.d.name||''))}).forEach(function(x){
+    var parts=[['project',x.id,'sheet','Project sheet'],['project',x.id,'wiki','Project wiki']].concat(pages('project').map(function(pg){return ['project',x.id,'c_'+pg.id,pg.name||'Tab']}));
+    if(projChecks(x.id).length)parts.push(['project',x.id,'checks','Checklists']);
+    if(Object.keys(store.records).some(function(r){return store.records[r].project===x.id}))parts.push(['project',x.id,'records','Records']);
+    add('Project - '+(x.d.name||'Untitled project')+(x.d.archived?' (archived)':''),combine(parts))});
+  Object.keys(store.people).map(function(id){return {id:id,d:store.people[id]}}).sort(function(a,b){return String(a.d.name||'').localeCompare(String(b.d.name||''))}).forEach(function(x){
+    var parts=[['person',x.id,'sheet','Person sheet']].concat(pages('person').map(function(pg){return ['person',x.id,'c_'+pg.id,pg.name||'Tab']}));
+    add('Person - '+(x.d.name||'Unnamed')+(x.d.archived?' (archived)':''),combine(parts))});
+  Object.keys(store.records).map(function(id){return {id:id,d:store.records[id]}}).sort(function(a,b){return String(a.d.date||'').localeCompare(String(b.d.date||''))}).forEach(function(x){var r=x.d,pr=store.projects[r.project];
+    add('Record - '+(r.date||'undated')+' - '+formDef(r.type).name+(r.title?' - '+r.title:'')+(pr&&pr.name&&String(r.title||'').indexOf(pr.name)<0?' - '+pr.name:''),modelFor('record',x.id))});
+  [['dash','Dashboard'],['actions','Actions'],['gsched','Schedule'],['sched','Resourcing'],['bd','Business development'],['team','Team']].forEach(function(w){add('Workspace - '+w[1],modelFor(w[0],null))});
+  pages('page').forEach(function(pg){add('Workspace - '+(pg.name||'Page'),modelFor('page',pg.id))});
+  return out}
+/* the chosen folder is remembered in this browser (IndexedDB), so later backups go straight there */
+function bkStore(mode,fn){return new Promise(function(res,rej){try{var rq=indexedDB.open('lw-backup',1);rq.onupgradeneeded=function(){rq.result.createObjectStore('h')};
+    rq.onsuccess=function(){try{var tx=rq.result.transaction('h',mode),q=fn(tx.objectStore('h'));tx.oncomplete=function(){res(q&&q.result)};tx.onerror=function(){rej(tx.error)}}catch(e){rej(e)}};rq.onerror=function(){rej(rq.error)}}catch(e){rej(e)}})}
+function bkFolder(pick){if(!window.showDirectoryPicker)return Promise.resolve(null);
+  var choose=function(){return window.showDirectoryPicker({id:'lw-backup',mode:'readwrite',startIn:'documents'}).then(function(h){return bkStore('readwrite',function(st){return st.put(h,'dir')}).then(function(){return h},function(){return h})})};
+  if(pick)return choose();
+  return bkStore('readonly',function(st){return st.get('dir')}).catch(function(){return null}).then(function(h){if(!h)return choose();
+    return h.queryPermission({mode:'readwrite'}).then(function(q){return q==='granted'?q:h.requestPermission({mode:'readwrite'})}).then(function(q){return q==='granted'?h:choose()})})}
+var JSZIP_URL='https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js',bkBusy=false;
+function loadZip(){if(window.JSZip)return Promise.resolve(window.JSZip);return new Promise(function(res,rej){var sc=document.createElement('script');sc.src=JSZIP_URL;sc.onload=function(){window.JSZip?res(window.JSZip):rej(new Error('nozip'))};sc.onerror=function(){rej(new Error('nozip'))};document.head.appendChild(sc)})}
+function wordBackup(pick){if(bkBusy)return;bkBusy=true;var dir=null,zip=null,n=0,failed=[],docs;
+  var done=function(){bkBusy=false};
+  bkFolder(pick).catch(function(e){if(e&&e.name==='AbortError')throw e;return null}).then(function(h){dir=h;return loadDocx()}).then(function(){
+    if(!dir)return loadZip().then(function(Z){zip=new Z()})}).then(function(){
+    docs=backupDocs();docs.push({name:'_Restore file - lead_workspace_backup.json',text:backupJson()});
+    var put=function(name,blob){if(zip){zip.file(name,blob);return Promise.resolve()}
+      return dir.getFileHandle(name,{create:true}).then(function(fh){return fh.createWritable()}).then(function(w){return w.write(blob).then(function(){return w.close()})})};
+    var chain=Promise.resolve();
+    docs.forEach(function(d,i){chain=chain.then(function(){toast('Backing up '+(i+1)+' of '+docs.length);
+      if(d.text!=null)return put(d.name,new Blob([d.text],{type:'application/json'}));
+      return loadPics(d.model).then(function(){return window.docx.Packer.toBlob(makeDocx(d.model))}).then(function(bl){return put(d.name,bl)})}).then(function(){n++},function(){failed.push(d.name)})});
+    return chain}).then(function(){
+    if(zip)return zip.generateAsync({type:'blob'}).then(function(bl){return bl.arrayBuffer()}).then(function(buf){download('Lead workspace backup '+today()+'.zip',buf)})}).then(function(){
+    var st=single('settings');st.lastBackup={at:new Date().toISOString(),files:n,folder:dir?dir.name:'zip download'};save('single','settings');render();
+    toast((dir?'Backed up '+n+' files to '+dir.name:'Downloaded a zip of '+n+' files')+(failed.length?'. '+failed.length+' could not be written: '+failed.slice(0,3).join(', ')+(failed.length>3?'\u2026':''):''));done()},
+    function(e){done();if(e&&e.name==='AbortError')return;
+      toast(e&&e.message==='nodocx'?'The Word library did not load. Check your connection and try again.':e&&e.message==='nozip'?'The zip library did not load. Check your connection and try again.':'The backup did not finish: '+((e&&e.message)||'unknown error'))})}
 function loadPics(model){var jobs=[];
   (model.rows||[]).forEach(function(r){(r.cols||[]).forEach(function(c){c.forEach(function(b){if(b&&b.kind==='files')b.items.forEach(function(it){if(it.img&&jobs.length<24)jobs.push(it)})})})});
   return Promise.all(jobs.map(function(it){return new Promise(function(res){var im=new Image(),doneOnce=false,fin=function(){if(!doneOnce){doneOnce=true;res()}};
@@ -2443,7 +2495,9 @@ document.addEventListener('click',function(e){
   if(act==='snap'){var model=modelDash();put('snaps',newId(),{date:today(),ts:Date.now(),json:JSON.stringify(model)});exportPdf(model,'Dashboard_snapshot_'+today()+'.pdf');if(!dl)toast('Snapshot saved under Archive and snapshots.');return}
   if(act==='snappdf'){var s=store.snaps[a.dataset.id];if(s)exportPdf(s.json?JSON.parse(s.json):s.model,'Dashboard_snapshot_'+s.date+'.pdf');return}
   if(act==='delsnap'){delDoc('snaps',a.dataset.id,'the snapshot');render();return}
-  if(act==='backup'){var out={app:'lead-workspace',version:2,exported:new Date().toISOString()};KINDS.forEach(function(k){out[k]=store[k]});download('lead_workspace_backup_'+today()+'.json',JSON.stringify(out,null,1));return}
+  if(act==='backup'){download('lead_workspace_backup_'+today()+'.json',backupJson());return}
+  if(act==='wordbk'){wordBackup(false);return}
+  if(act==='wordbkdir'){wordBackup(true);return}
 });
 function restoreFile(el){var file=el.files&&el.files[0];if(!file)return;var rd=new FileReader();
   rd.onload=function(){var data;try{data=JSON.parse(rd.result)}catch(e){data=null}
