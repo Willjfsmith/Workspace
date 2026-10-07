@@ -740,6 +740,7 @@ li:hover > .aupdb,.aupdb:focus-visible{opacity:1}
 .ptck{display:inline-flex; gap:5px; align-items:center; cursor:pointer}
 .rtl .rtgh{font-size:.72rem; font-weight:600; letter-spacing:.03em; text-transform:uppercase; color:var(--muted); padding:10px 9px 3px; background:var(--rail)}
 .rtl .rtgh:first-child{padding-top:6px}
+#verbar{position:fixed; left:50%; transform:translateX(-50%); top:calc(10px + env(safe-area-inset-top,0px)); z-index:60; display:flex; gap:10px; align-items:center; background:var(--sheet); border:1px solid var(--ink); border-radius:4px; padding:8px 10px 8px 14px; box-shadow:0 8px 24px rgba(0,0,0,.18); font-size:.88rem; max-width:calc(100vw - 24px)}
 </style>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
 <script src="firebase-config.js"></script>
@@ -2675,6 +2676,8 @@ document.addEventListener('click',function(e){
   if(act==='menu'){document.documentElement.classList.toggle('menu-open');return}
   if(act==='msearch'){go('search');render('search2');return}
   if(act==='capsheet'){openSheet();return}
+  if(act==='reloadapp'){location.reload();return}
+  if(act==='verlater'){var vb=document.getElementById('verbar');if(vb)vb.remove();return}
   if(act==='notes2rec'){var np=a.dataset.p,dd=single('dash'),nh=dd[np]||'',nk=dd[np+'_ink'],hasInk=!!(nk&&nk.s&&nk.s.length);
     if(!plain(nh).trim()&&!hasInk){toast('There is nothing in these notes yet.');return}
     var nrid=newRecord('general','',''),nr=store.records[nrid];nr.title='Notes from the dashboard, '+fmtD(today());nr.d.notes=nh;if(hasInk)nr.d.notes_ink=clone(nk);save('records',nrid,true);
@@ -2735,6 +2738,13 @@ function applyAll(data){var chain=Promise.resolve();
     Object.keys(store[k]).forEach(function(id){if(!incoming[id])remove(k,id)});
     Object.keys(incoming).forEach(function(id){store[k][id]=clone(incoming[id]);var key=k+'/'+id;delete gone[key];fresh[key]=Date.now();dirty[key]=true;chain=chain.then(function(){return flush(k,id)})})})}
 
+/* ---- new version check: when a newer copy of the app is published, offer a reload ---- */
+var verTag=null,verShown=false;
+function verOf(r){return r&&r.ok?(r.headers.get('etag')||r.headers.get('last-modified')||''):''}
+function checkVersion(){if(verShown||!window.fetch||location.protocol==='file:')return;
+  fetch(location.pathname+'?v='+Date.now(),{method:'HEAD',cache:'no-store'}).then(function(r){var t=verOf(r);if(!t)return;if(verTag===null){verTag=t;return}
+    if(t!==verTag){verShown=true;var b=document.createElement('div');b.id='verbar';b.className='nop';b.innerHTML='<span>Workspace has been updated.</span><button class="btn pri" data-act="reloadapp">Reload</button><button class="mini" data-act="verlater">Later</button>';document.body.appendChild(b)}}).catch(function(){})}
+checkVersion();setInterval(checkVersion,15*60000);document.addEventListener('visibilitychange',function(){if(document.visibilityState==='visible')checkVersion()});
 /* ================= start ================= */
 function use(n){try{return window.claude&&window.claude.use?window.claude.use(n).catch(function(){return null}):Promise.resolve(null)}catch(e){return Promise.resolve(null)}}
 inkBars();render();
