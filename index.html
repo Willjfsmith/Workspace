@@ -732,6 +732,9 @@ body.gdragging{cursor:grabbing; user-select:none; -webkit-user-select:none}
 .aupdb{all:unset; cursor:pointer; color:var(--muted); font-size:.8rem; padding:0 4px; opacity:0}
 li:hover > .aupdb,.aupdb:focus-visible{opacity:1}
 @media (pointer:coarse){.aupdb{opacity:.6}}
+.ptrow{display:flex; flex-wrap:wrap; gap:4px 14px; align-items:center; padding:6px 9px; border-top:1px solid var(--rule); font-size:.85rem}
+.ptrow .lab{width:110px; color:var(--muted); font-size:.78rem}
+.ptck{display:inline-flex; gap:5px; align-items:center; cursor:pointer}
 </style>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
 <script src="firebase-config.js"></script>
@@ -835,7 +838,8 @@ function moveChecks(){var tp=templates();Object.keys(store.projects).forEach(fun
     if(!store.records[rid])put('records',rid,{type:'checklist',title:k.name||'Checklist',date:p.updated||today(),project:pid,person:'',ts:p.ts||Date.now(),d:{items:items}})});
   delete p.checks;save('projects',pid,true)})}
 function markOldFiled(){var st=single('settings');if(st.unfiledFrom)return;var n=0;Object.keys(store.records).forEach(function(id){var r=store.records[id];if(r&&!r.project&&!r.person&&!r.filed){r.filed=true;save('records',id,true);n++}});st.unfiledFrom=today();save('single','settings',true)}
-function migrate(){mergeLists();markOldFiled();moveChecks();Object.keys(store.records).forEach(function(id){var r=store.records[id];if(r&&'folder' in r){if(r.folder&&!r.project)r.project=internalProject(r.folder);delete r.folder;save('records',id,true)}});var dt=store.single.dash;if(dt&&Array.isArray(dt.top3)&&dt.top3.some(function(r){return r&&r.t})){dt.top3.forEach(function(r){if(r&&r.t)single('actions').list.push({t:r.t,pri:true,done:!!r.done,kind:''})});dt.top3=[];save('single','dash',true);save('single','actions',true)}Object.keys(store.projects).forEach(function(id){if(convSched(store.projects[id]))save('projects',id,true)});var d=store.single.dash;if(d&&Array.isArray(d.props)&&d.props.length){var bd=single('bd');
+function typeProjects(){Object.keys(store.projects).forEach(function(id){var pj=store.projects[id];if(pj&&!pj.ptype){pj.ptype=pj.scope==='internal'?'internal':'client';save('projects',id,true)}})}
+function migrate(){mergeLists();typeProjects();markOldFiled();moveChecks();Object.keys(store.records).forEach(function(id){var r=store.records[id];if(r&&'folder' in r){if(r.folder&&!r.project)r.project=internalProject(r.folder);delete r.folder;save('records',id,true)}});var dt=store.single.dash;if(dt&&Array.isArray(dt.top3)&&dt.top3.some(function(r){return r&&r.t})){dt.top3.forEach(function(r){if(r&&r.t)single('actions').list.push({t:r.t,pri:true,done:!!r.done,kind:''})});dt.top3=[];save('single','dash',true);save('single','actions',true)}Object.keys(store.projects).forEach(function(id){if(convSched(store.projects[id]))save('projects',id,true)});var d=store.single.dash;if(d&&Array.isArray(d.props)&&d.props.length){var bd=single('bd');
     d.props.forEach(function(r){if(r&&r.t)bd.pipeline.push({opp:r.t})});delete d.props;save('single','dash',true);save('single','bd',true)}}
 function status(){var el=document.getElementById('status');if(!el)return;
   el.className=mode==='local'?'warn':'';
@@ -1064,7 +1068,7 @@ function getLayout(lid){var own=layouts().L[lid];
   if(lid==='sheet'&&own&&own.rows&&!hasKey(own,'_pacts')){own.rows.splice(Math.min(1,own.rows.length),0,L(null,SP('pacts','Actions')));save('single','layouts')}
   if(lid==='person'&&own&&own.rows&&!hasKey(own,'sched'))own.rows.splice(Math.min(1,own.rows.length),0,L(null,{kind:'gantt',k:'sched',t:'Schedule'}));   /* person layouts edited before person schedules existed gain one */
   if(lid==='sheet'&&own&&own.rows&&!hasKey(own,'library'))own.rows.splice(Math.min(1,own.rows.length),0,L(null,LIB()));   /* layouts edited before the library existed gain it */
-  return own||DEFAULTS[lid]||{rows:[]}}
+  return own||DEFAULTS[lid]||(lid.indexOf('pt_')===0?ptDefault(lid):null)||{rows:[]}}
 function formDef(type){var F=FORMS[type];if(F)return {name:F.name,title:F.title,rows:getLayout('f_'+type).rows,lid:'f_'+type};
   var pg=pages('form').filter(function(p){return 'c_'+p.id===type})[0];if(pg)return {name:pg.name||'Custom form',title:'Title',rows:getLayout(type).rows,lid:type};
   return {name:'Record',title:'Title',rows:[],lid:null}}
@@ -1075,13 +1079,35 @@ function newRecord(type,project,person){var r={type:type,title:'',date:today(),p
   return put('records',newId(),r)}
 function ckCount(r){var it=(r&&r.d&&r.d.items||[]).filter(function(i){return i&&i.t});return {n:it.length,d:it.filter(function(i){return i.done}).length}}
 function recSummary(r){if(r.type==='checklist'){var c=ckCount(r);return c.n?(c.d===c.n?'Complete, ':'')+c.d+' of '+c.n+' done':''}return (r.d||{}).summary||''}
-function isInt(p){return !!(p&&p.scope==='internal')}
+/* project types: each has its own header fields, tabs and (optionally) its own sheet layout. Kept in Settings, so they sync. */
+var PT_DEFAULT=[{id:'client',name:'Client job',internal:false,fields:{client:true,phase:true,status:true},offTabs:{},own:''},
+  {id:'internal',name:'Internal',internal:true,fields:{status:true},offTabs:{},own:''},
+  {id:'personal',name:'Personal',internal:true,fields:{status:true},offTabs:{wiki:true,checks:true},own:'1'}];
+function ptypes(){var st=single('settings');if(!Array.isArray(st.ptypes)||!st.ptypes.length)st.ptypes=clone(PT_DEFAULT);return st.ptypes}
+function ptypeOf(p){var L=ptypes(),id=p&&p.ptype||(p&&p.scope==='internal'?'internal':'client');return L.filter(function(t){return t.id===id})[0]||L.filter(function(t){return t.id===(p&&p.scope==='internal'?'internal':'client')})[0]||L[0]}
+function ptypesBox(){var L=ptypes(),ct=pages('project'),TB=[['wiki','Project wiki'],['checks','Checklists'],['records','Records']].concat(ct.map(function(p){return ['c_'+p.id,p.name||'Untitled tab']}));
+  var used=function(t){return Object.keys(store.projects).filter(function(id){return ptypeOf(store.projects[id]).id===t.id}).length};
+  return '<div class="head" style="margin-top:18px"><h2 style="font-size:1.3rem">Project types</h2><span class="meta">Each type sets which header fields and tabs a project shows, and can have its own sheet layout. Choose a project\u2019s type from its Type field.</span></div>'
+    +L.map(function(t,i){var P='single|settings|ptypes.'+i+'.',n=used(t),ck=function(path,lab){var v=get(t,path);return '<label class="ptck"><input type="checkbox" data-b="'+P+path+'" data-k="'+P+path+'" data-rr="1"'+(v?' checked':'')+'> '+esc(lab)+'</label>'};
+      return '<div class="g"><section class="box"><div class="bt"><input data-b="'+P+'name" data-k="'+P+'name" data-rr="1" value="'+esc(t.name||'')+'" placeholder="Type name" aria-label="Type name" style="border:0;background:transparent;font-weight:600;font-size:.9rem;min-width:0;flex:0 1 260px"><span>'+n+(n===1?' project':' projects')+'</span>'
+        +'<span class="r">'+(L.length>1?'<button class="mini" data-act="rmptype" data-i="'+i+'">'+(ui.confirm==='pt'+i?(n?'Confirm: move its projects to '+esc(L[i===0?1:0].name||'the first type'):'Confirm remove'):'Remove type')+'</button>':'')+'</span></div>'
+        +'<div class="ptrow"><span class="lab">Header fields</span>'+ck('fields.client','Client')+ck('fields.phase','Phase')+ck('fields.status','Status')+ck('internal','List under Internal')+'</div>'
+        +'<div class="ptrow"><span class="lab">Tabs</span><label class="ptck"><input type="checkbox" checked disabled> Project sheet</label>'+TB.map(function(x){return '<label class="ptck"><input type="checkbox" data-pttab="'+i+'|'+x[0]+'"'+(t.offTabs&&t.offTabs[x[0]]?'':' checked')+'> '+esc(x[1])+'</label>'}).join('')+'</div>'
+        +'<div class="ptrow"><span class="lab">Sheet layout</span><select class="newrec" data-b="'+P+'own" data-k="'+P+'own" data-rr="1" aria-label="Sheet layout">'+opts([['','The standard project sheet'],['1','Its own layout']],t.own?'1':'')+'</select>'
+        +'<button class="mini" data-act="edit" data-lid="'+(t.own?'pt_'+t.id:'sheet')+'">Edit '+(t.own?'its':'the standard')+' layout</button></div></section></div>'}).join('')
+    +'<div class="head"><button class="btn" data-act="addptype">Add a project type</button></div>'}
+function ptypeOpts(){return ptypes().map(function(t){return [t.id,t.name||'Untitled type']})}
+function sheetLid(p){var t=ptypeOf(p);return t&&t.own?'pt_'+t.id:'sheet'}
+function ptDefault(lid){if(lid==='pt_personal')return {rows:[L([1,1],A('goal','Goal',3),A('why','Why it matters',3)),L(null,TICKS('plan','Plan')),L(null,SP('pacts','Actions')),L(null,{kind:'gantt',k:'sched',t:'Schedule'}),L(null,R('notes','Notes',null,160)),L(null,LIB())]};
+  return {rows:[L(null,SP('pacts','Actions')),L(null,{kind:'gantt',k:'sched',t:'Schedule'}),L(null,R('notes','Notes',null,160))]}}
+function tabOn(p,k){var t=ptypeOf(p);return k==='sheet'||!(t&&t.offTabs&&t.offTabs[k])}
+function isInt(p){var t=p&&ptypeOf(p);return !!(t&&t.internal)}
 function projSplit(arch){var a=sorted('projects',arch);return {ext:a.filter(function(x){return !isInt(x.d)}),int:a.filter(function(x){return isInt(x.d)})}}
 function projGroups(none){var s=projSplit(),m=function(x){return [x.id,x.d.name||'Untitled project']};return [['',none]].concat(s.int.length?[{group:'External projects',items:s.ext.map(m)},{group:'Internal',items:s.int.map(m)}]:s.ext.map(m))}
 function projOpts(){return projGroups('None')}
 var SCOPES=[['','External'],['internal','Internal']];
 function internalProject(name){var n=String(name||'').trim().toLowerCase();if(!n)return '';var hit=Object.keys(store.projects).filter(function(id){var p=store.projects[id];return isInt(p)&&!p.archived&&String(p.name||'').trim().toLowerCase()===n})[0];
-  if(hit)return hit;var p=newProject(name);p.scope='internal';p.isNew=false;return put('projects',newId(),p)}
+  if(hit)return hit;var p=newProject(name);p.scope='internal';p.ptype='internal';p.isNew=false;return put('projects',newId(),p)}
 function projOrder(){var s=projSplit();return s.ext.concat(s.int)}
 function peopleOpts(){return [['','None']].concat(sorted('people').map(function(x){return [x.id,x.d.name||'Unnamed']}))}
 var colsOf=function(b,doc){return b.weeks?weekCols((doc||{}).start,b.weeks.first,b.weeks.label):(b.cols||[])};
@@ -1127,13 +1153,14 @@ function newKinds(lid,lay){var a=NEWKINDS.slice();if(lid==='dash'){[['gsched','S
 var LOCKED={dash:['top3'],sheet:['sched','risks','changes','vendor'],person:['sched','plan','reg','checkins'],bd:['pipeline'],office:['items']};
 function locked(lid,b){return b.kind==='special'||b.kind==='gantt'||!!b.weeks||(LOCKED[lid]||[]).indexOf(b.k)>=0||(isForm(lid)&&(b.k==='actions'||b.k==='summary'))}
 function layoutInfo(lid){var N={dash:['Dashboard','this page'],sheet:['Project sheet','every project'],wiki:['Project wiki','every project'],person:['Person sheet','every person'],bd:['Business development','this page'],office:['Team','this page']};
-  if(N[lid])return N[lid];if(lid.indexOf('own:')===0){var op=lid.split(':'),od=store[op[1]][op[2]]||{};return ['extra sections','only '+(od.name||'this one')+', below the shared layout']}
+  if(N[lid])return N[lid];if(lid.indexOf('pt_')===0){var pt=ptypes().filter(function(t){return 'pt_'+t.id===lid})[0];return [(pt&&pt.name||'Project type')+' sheet','every '+(pt&&pt.name||'')+' project']}
+  if(lid.indexOf('own:')===0){var op=lid.split(':'),od=store[op[1]][op[2]]||{};return ['extra sections','only '+(od.name||'this one')+', below the shared layout']}
   if(lid.indexOf('f_')===0)return [(FORMS[lid.slice(2)]||{name:'Form'}).name,'every record of this type, old and new'];
   var pg=pages().filter(function(p){return 'c_'+p.id===lid})[0]||{};
   return [pg.name||'Untitled',pg.scope==='project'?'every project':pg.scope==='person'?'every person':pg.scope==='form'?'every record of this type':'this page']}
 function tgt(lid){if(lid.indexOf('own:')===0){var p=lid.split(':'),doc=store[p[1]][p[2]];if(!doc.own||!Array.isArray(doc.own.rows))doc.own={rows:[{cols:[{b:[]}]}]};return {kind:p[1],id:p[2],path:'own.',lay:doc.own,own:true}}
   return {kind:'single',id:'layouts',path:'L.'+lid+'.',lay:editLayout(lid)}}
-function editLayout(lid){var S=layouts();if(!S.L[lid]){S.L[lid]=clone(DEFAULTS[lid]||{rows:[{cols:[{b:[]}]}]});save('single','layouts')}return S.L[lid]}
+function editLayout(lid){var S=layouts();if(!S.L[lid]){S.L[lid]=clone(DEFAULTS[lid]||(lid.indexOf('pt_')===0?ptDefault(lid):null)||{rows:[{cols:[{b:[]}]}]});save('single','layouts')}return S.L[lid]}
 function newBox(type){var k='s'+newId();
   if(type==='actions')return clone(ACTIONS());
   if(type==='summary')return A('summary','Summary',2,'Shows in the record list');
@@ -1221,7 +1248,7 @@ function feedCols(b){var cols=b.cols||[],one=function(fn){return cols.filter(fn)
 /* every place a layout is filled in */
 function instances(){var out=[],P=pages('project'),E=pages('person');
   sorted('projects').forEach(function(x){var nm=x.d.name||'Project',add=function(base,rows,tab){out.push({kind:'projects',id:x.id,base:base,rows:rows,label:nm,go:{v:'project',id:x.id,tab:tab},project:x.id})};
-    add('',getLayout('sheet').rows,'sheet');add('wiki.',getLayout('wiki').rows,'wiki');P.forEach(function(p){add('x.'+p.id+'.',getLayout('c_'+p.id).rows,'c_'+p.id)});if(x.d.own)add('',x.d.own.rows,'sheet')});
+    add('',getLayout(sheetLid(x.d)).rows,'sheet');add('wiki.',getLayout('wiki').rows,'wiki');P.forEach(function(p){add('x.'+p.id+'.',getLayout('c_'+p.id).rows,'c_'+p.id)});if(x.d.own)add('',x.d.own.rows,'sheet')});
   sorted('people').forEach(function(x){var nm=x.d.name||'Person',add=function(base,rows,tab){out.push({kind:'people',id:x.id,base:base,rows:rows,label:nm,go:{v:'person',id:x.id,tab:tab},person:x.id})};
     add('',getLayout('person').rows,'sheet');E.forEach(function(p){add('x.'+p.id+'.',getLayout('c_'+p.id).rows,'c_'+p.id)});if(x.d.own)add('',x.d.own.rows,'sheet')});
   [['bd','Business development'],['office','Office and internal'],['dash','Dashboard']].forEach(function(z){out.push({kind:'single',id:z[0],base:'',rows:getLayout(z[0]).rows,label:z[1],go:{v:z[0]}})});
@@ -1734,14 +1761,16 @@ V.project=function(){
   var id=ui.id,d=store.projects[id];if(!d){ui.v='dash';return V.dash()}
   var recs=Object.keys(store.records).filter(function(r){return store.records[r].project===id}).length;
   var cks=projChecks(id),copen=cks.filter(function(x){var c=ckCount(x.d);return c.d<c.n}).length;
-  var tab=function(k,l){if(k!=='sheet'&&d.hideTabs&&d.hideTabs[k]&&ui.hideEdit!==id)return '';return '<button data-tab="'+k+'" aria-pressed="'+(ui.tab===k)+'">'+l+'</button>'};
+  var tab=function(k,l){if(!tabOn(d,k))return '';if(k!=='sheet'&&d.hideTabs&&d.hideTabs[k]&&ui.hideEdit!==id)return '';return '<button data-tab="'+k+'" aria-pressed="'+(ui.tab===k)+'">'+l+'</button>'};
   var ctabs=pages('project');if(ui.tab.indexOf('c_')===0&&!ctabs.some(function(p){return 'c_'+p.id===ui.tab}))ui.tab='sheet';
   var htabs=d.hideTabs||{},choosing=ui.hideEdit===id;if(htabs[ui.tab]&&!choosing)ui.tab='sheet';
-  var TABL=[['wiki','Project wiki'],['checks','Checklists'],['records','Records']].concat(ctabs.map(function(p){return ['c_'+p.id,p.name||'Untitled']}));
-  var lid=ui.tab==='sheet'||ui.tab==='wiki'||ui.tab.indexOf('c_')===0?ui.tab:null;
-  var h='<div class="head"><h1 class="hname">'+mark(d.status)+' '+nameIn('projects',id,'Untitled project','Project name')+'</h1><span class="sp"></span>'+updated(d)+pdfBtn+(lid&&!ui.edit?editBtn(lid)+(ui.tab==='sheet'?'<button class="btn" data-act="edit" data-lid="own:projects:'+id+'">Add sections to this project only</button>':''):'')
+  var TABL=[['wiki','Project wiki'],['checks','Checklists'],['records','Records']].concat(ctabs.map(function(p){return ['c_'+p.id,p.name||'Untitled']})).filter(function(t){return tabOn(d,t[0])});
+  var pt=ptypeOf(d);if(!tabOn(d,ui.tab))ui.tab='sheet';
+  var lid=ui.tab==='sheet'?sheetLid(d):ui.tab==='wiki'||ui.tab.indexOf('c_')===0?ui.tab:null;
+  var HF=[];if(pt.fields.client)HF.push(['client','Client',1.4]);if(pt.fields.phase)HF.push(['phase','Phase',.9,'select',PHASES]);if(pt.fields.status)HF.push(['status','Status',.8,'select',STATUS]);HF.push(['ptype','Type',.8,'select',ptypeOpts]);
+  var h='<div class="head"><h1 class="hname">'+mark(pt.fields.status?d.status:'')+' '+nameIn('projects',id,'Untitled project','Project name')+'</h1><span class="sp"></span>'+updated(d)+pdfBtn+(lid&&!ui.edit?editBtn(lid)+(ui.tab==='sheet'?'<button class="btn" data-act="edit" data-lid="own:projects:'+id+'">Add sections to this project only</button>':''):'')
     +(ui.edit?'':'<button class="btn" data-act="hideedit">Show or hide sections</button>')+'<button class="btn" data-act="archive" data-kind="projects">'+(d.archived?'Restore from archive':'Archive')+'</button><button class="btn danger" data-act="del" data-kind="projects">'+(ui.confirm==='del'?'Confirm delete':'Delete')+'</button></div>'
-    +hfields('projects',id,[['client','Client',1.4],['phase','Phase',.9,'select',PHASES],['status','Status',.8,'select',STATUS],['scope','Type',.7,'select',SCOPES]])
+    +hfields('projects',id,HF)
     +'<div class="tabs" style="margin-bottom:12px">'+tab('sheet','Project sheet')+tab('wiki','Project wiki')+tab('checks','Checklists'+(copen?' '+copen+' open':''))+tab('records','Records'+(recs?' '+recs:''))+ctabs.map(function(p){return tab('c_'+p.id,esc(p.name||'Untitled'))}).join('')+'</div>'+hideBar('projects',id,TABL);
   if(ui.edit&&lid)return h+editor(ui.edit);
   var hn=hideNote('projects',id);
@@ -1755,9 +1784,10 @@ V.project=function(){
       +'<div class="head"><select data-ui="tpl" aria-label="Checklist template" style="border:1px solid var(--line);background:transparent;border-radius:3px;padding:5px 6px">'+opts(templates().map(function(t,i){return [i,t.name||'Untitled checklist']}).concat([['blank','Blank checklist']]),ui.tpl)+'</select>'
       +'<button class="btn" data-act="addcheck">Start checklist</button><span class="sp"></span><button class="mini" data-go="settings">Edit checklist templates</button></div>';
   var others=Object.keys(store.projects).filter(function(x){return x!==id}).map(function(x){return [x,(store.projects[x].name||'Untitled project')+(store.projects[x].archived?' (archived)':'')]});
-  var from=d.isNew&&others.length?'<div class="g nop">'+box('Start from an existing project','<div class="eline"><select class="ein" data-ui="from" aria-label="Project to copy from">'+opts(others,ui.from||others[0][0])+'</select>'
-    +'<button class="btn pri" data-act="copyfrom">Copy its wiki and team</button><button class="btn" data-act="dismissnew">Start blank</button></div>','Records and checklists stay with the original project'):'';
-  return h+from+rRows('projects',id,'',getLayout('sheet').rows)+rRows('projects',id,'',(d.own||{}).rows)+hn;
+  var from=d.isNew?'<div class="g nop">'+box('New project','<div class="eline"><span class="meta">What kind of project?</span>'+ptypes().map(function(t){return '<button class="btn'+(pt.id===t.id?' pri':'')+'" data-act="setptype" data-pt="'+t.id+'">'+esc(t.name||'Untitled type')+'</button>'}).join('')+'</div>'
+    +(others.length?'<div class="eline"><select class="ein" data-ui="from" aria-label="Project to copy from">'+opts(others,ui.from||others[0][0])+'</select><button class="btn" data-act="copyfrom">Copy its wiki, team and type</button></div>':'')
+    +'<div class="eline"><button class="btn" data-act="dismissnew">Done</button><span class="meta">Change the type later from the Type field. Edit types in Settings.</span></div>','Records and checklists stay with the original project'):'';
+  return h+from+rRows('projects',id,'',getLayout(sheetLid(d)).rows)+rRows('projects',id,'',(d.own||{}).rows)+hn;
 };
 V.person=function(){
   var id=ui.id,d=store.people[id];if(!d){ui.v='dash';return V.dash()}
@@ -1876,6 +1906,7 @@ V.settings=function(){
     +'<div class="g">'+box('Built-in layouts','<p class="empty">To change a built-in page, open it and choose Edit layout: the project sheet and wiki from any project, the person sheet from any person, a record form from any record of that type.</p>')+'</div>'
     +'<div class="g">'+box('Backup','<p class="empty">'+bkLine()+'</p><p class="empty">Back up as Word writes one Word document per project, person, record and workspace page into a folder you choose, replacing the previous copies. Make a folder of its own for it, such as OneDrive\\Workspace backup: the browser will not write straight into Downloads, Documents or Desktop. It includes the restore file. Download backup saves just the restore file. Restoring replaces what is here with the file\'s contents.</p><div class="head" style="padding:0 9px 10px;margin:0"><button class="btn pri" data-act="wordbk">Back up as Word</button>'+(window.showDirectoryPicker?'<button class="btn" data-act="wordbkdir">Choose a different folder</button>':'')+'<button class="btn" data-act="backup">Download backup</button>'
       +'<label class="btn" style="cursor:pointer">'+(ui.confirm==='restore'?'Choose the file to restore from':'Restore from backup')+'<input class="file" type="file" accept=".json,application/json" data-restore="1"></label></div>')+'</div>'
+    +ptypesBox()
     +'<div class="head" style="margin-top:18px"><h2 style="font-size:1.3rem">Checklist templates</h2><span class="meta">Start one from a project\u2019s Checklists tab or as a new record. Editing a template does not change checklists already started.</span></div>'
     +tp.map(function(t,i){var nk='single|settings|checklists.'+i+'.name';
       return '<div class="g"><section class="box"><div class="bt"><input data-b="'+nk+'" data-k="'+nk+'" value="'+esc(t.name)+'" placeholder="Checklist name" aria-label="Checklist name" style="border:0;background:transparent;font-weight:600;font-size:.9rem;min-width:0;flex:0 1 260px"><span class="r"><button class="mini" data-act="rmtpl" data-i="'+i+'">'+(ui.confirm==='tpl'+i?'Confirm remove':'Remove template')+'</button></span></div>'
@@ -1901,12 +1932,12 @@ function mRows(doc,base,rows){rows=unhidden(doc,base,rows);return (rows||[]).map
 function modelDash(){return {title:'Dashboard',sub:'As at '+fmtL(today()),rows:mRows(single('dash'),'',getLayout('dash').rows)}}
 function currentModel(){var v=ui.v,d,nm;
   if(v==='dash')return modelDash();
-  if(v==='project'){d=store.projects[ui.id];nm=d.name||'Untitled project';var meta=[['Client',d.client],['Phase',d.phase],['Status',cellText({type:'select',opts:STATUS},d.status)]];
+  if(v==='project'){d=store.projects[ui.id];nm=d.name||'Untitled project';var ptm=ptypeOf(d),meta=[['Type',ptm&&ptm.name],ptm.fields.client?['Client',d.client]:['',''],ptm.fields.phase?['Phase',d.phase]:['',''],ptm.fields.status?['Status',cellText({type:'select',opts:STATUS},d.status)]:['','']].filter(function(m){return m[0]});
     if(ui.tab==='wiki')return {title:nm,kicker:'Project wiki',meta:meta,rows:mRows(d,'wiki.',getLayout('wiki').rows)};
     if(ui.tab.indexOf('c_')===0)return {title:nm,kicker:layoutInfo(ui.tab)[0],meta:meta,rows:mRows(d,'x.'+ui.tab.slice(2)+'.',getLayout(ui.tab).rows)};
     if(ui.tab==='checks')return {title:nm,kicker:'Checklists',meta:meta,rows:projChecks(ui.id).map(function(x){return {cols:[[{t:(x.d.title||'Checklist')+', '+fmtL(x.d.date),kind:'table',cols:[{label:'',w:.12,type:'check'},{label:'Check',w:2},{label:'Note',w:1}],rows:(x.d.d&&x.d.d.items||[]).filter(function(i){return i.t}).map(function(i){return [!!i.done,i.t||'',i.note||'']})}]]}})};
     if(ui.tab==='records')return {title:nm,kicker:'Records',meta:meta,rows:[{cols:[[recordsModel(function(x){return x.project===ui.id})]]}]};
-    return {title:nm,kicker:'Project sheet',meta:meta,rows:mRows(d,'',getLayout('sheet').rows).concat(mRows(d,'',(d.own||{}).rows))}}
+    return {title:nm,kicker:'Project sheet',meta:meta,rows:mRows(d,'',getLayout(sheetLid(d)).rows).concat(mRows(d,'',(d.own||{}).rows))}}
   if(v==='person'){d=store.people[ui.id];if(ui.tab.indexOf('c_')===0)return {title:d.name||'Unnamed',kicker:layoutInfo(ui.tab)[0],meta:[['Role',d.role]],rows:mRows(d,'x.'+ui.tab.slice(2)+'.',getLayout(ui.tab).rows)};
     return {title:d.name||'Unnamed',kicker:'Person sheet',meta:[['Role',d.role],['Started',fmtL(d.started)]],rows:mRows(d,'',getLayout('person').rows).concat(mRows(d,'',(d.own||{}).rows)).concat([{cols:[[recordsModel(function(x){return x.person===ui.id})]]}])}}
   if(v==='gsched')return {title:'Schedule',sub:'Open tasks as at '+fmtL(today()),rows:[{cols:[[SPECIAL.gsched.model({t:'All projects'})]]}]};
@@ -2391,7 +2422,8 @@ document.addEventListener('input',function(e){
   if(d.tfi){(ui.tv[d.tfi]||(ui.tv[d.tfi]={})).f=el.value;render();return}
   if(d.tcf){var cq=d.tcf.split('|'),cci=cq.pop(),ctk=cq.join('|'),ctv=ui.tv[ctk]||(ui.tv[ctk]={});ctv.cf=ctv.cf||{};if(el.value)ctv.cf[cci]=el.value.slice(1);else delete ctv.cf[cci];render();return}
   if(d.r){var r=d.r.split('|');if(!store[r[0]][r[1]])return;setp(store[r[0]][r[1]],r[2],cleanHtml(el.innerHTML));save(r[0],r[1]);return}
-  if(d.b){var p=d.b.split('|');if(!store[p[0]][p[1]])return;setp(store[p[0]][p[1]],p[2],val(el));save(p[0],p[1]);if(d.rr)needRender=true;return}
+  if(d.b){var p=d.b.split('|');if(!store[p[0]][p[1]])return;setp(store[p[0]][p[1]],p[2],val(el));
+    if(p[0]==='projects'&&p[2]==='ptype'){var npt=ptypes().filter(function(t){return t.id===el.value})[0];store.projects[p[1]].scope=npt&&npt.internal?'internal':'';needRender=true}save(p[0],p[1]);if(d.rr)needRender=true;return}
   if(d.l){var q=d.l.split('|'),doc=store[q[0]][q[1]];if(!doc)return;var arr=get(doc,q[2]);
     if(!Array.isArray(arr)){arr=[];setp(doc,q[2],arr)}
     var i=+q[3];if(i>=arr.length)needRender=true;while(arr.length<=i)arr.push({});
@@ -2405,6 +2437,7 @@ document.addEventListener('change',function(e){
   if(d.startpage){try{localStorage.setItem('lw.start',el.value)}catch(err){}toast('This device will open there next time');return}
   if(d.restore){restoreFile(el);return}
   if(d.hidetab){var tq=d.hidetab.split('|'),tdoc=store[tq[0]][tq[1]];if(tdoc){tdoc.hideTabs=tdoc.hideTabs||{};if(el.checked)delete tdoc.hideTabs[tq[2]];else tdoc.hideTabs[tq[2]]=1;save(tq[0],tq[1])}render();return}
+  if(d.pttab){var ptq=d.pttab.split('|'),ptt=ptypes()[+ptq[0]];if(ptt){ptt.offTabs=ptt.offTabs||{};if(el.checked)delete ptt.offTabs[ptq[1]];else ptt.offTabs[ptq[1]]=true;save('single','settings')}render();return}
   if(d.dgroup){dgroup=el.value;try{localStorage.setItem('lw.dgroup',dgroup)}catch(err){}render();return}
   if(d.capnew){var ct=el.value;el.value='';if(!ct)return;closeSheet();var ci2=newRecord(ct,'','');go('record',ci2);render('records|'+ci2+'|title');return}
   if(d.newrec){var nrt=el.value;el.value='';if(!nrt)return;var nrp=d.folder?internalProject(d.folder):d.project;var nri=newRecord(nrt,nrp,d.person);go('record',nri);render('records|'+nri+'|title');return}
@@ -2559,7 +2592,7 @@ document.addEventListener('click',function(e){
   if(act==='rmblock'){var gb=layouts().blocks.splice(+a.dataset.i,1)[0];save('single','layouts');render();toast('Removed the block',function(){layouts().blocks.splice(+a.dataset.i,0,gb);save('single','layouts');render()});return}
   if(act==='rmpage'){var pi=+a.dataset.i;if(ui.confirm!=='pg'+pi){ui.confirm='pg'+pi;render();return}ui.confirm=null;var gonePg=layouts().pages.splice(pi,1)[0];save('single','layouts');render();
     toast('Removed '+(gonePg.name||'it')+'. Its entries are kept.',function(){layouts().pages.splice(pi,0,gonePg);save('single','layouts');render()});return}
-  if(act==='new'){var nd=kind==='projects'?newProject(''):newPerson('');if(kind==='projects'&&a.dataset.scope==='internal'){nd.scope='internal'}var id=put(kind,newId(),nd);ui.v=kind==='projects'?'project':'person';ui.id=id;ui.tab='sheet';remember();render(kind+'|'+id+'|name');window.scrollTo(0,0);return}
+  if(act==='new'){var nd=kind==='projects'?newProject(''):newPerson('');if(kind==='projects'){nd.ptype=a.dataset.scope==='internal'?'internal':'client';if(a.dataset.scope==='internal')nd.scope='internal'}var id=put(kind,newId(),nd);ui.v=kind==='projects'?'project':'person';ui.id=id;ui.tab='sheet';remember();render(kind+'|'+id+'|name');window.scrollTo(0,0);return}
   if(act==='newrec'){var type=a.dataset.type||ui.rtype;if(!type){toast('Choose a type of record first.');return}
     if(a.dataset.folder)a.dataset.project=internalProject(a.dataset.folder);var rid=newRecord(type,a.dataset.project,a.dataset.person);go('record',rid);render('records|'+rid+'|title');return}
   if(act==='del'){if(ui.confirm!=='del'){ui.confirm='del';render();return}
@@ -2572,9 +2605,10 @@ document.addEventListener('click',function(e){
   if(act==='roll'){ui.tlOff=(ui.tlOff||0)+1;render();return}
   if(act==='kdtog'){ui.kdOpen=!ui.kdOpen;render(ui.kdOpen?'kd|t':undefined);return}
   if(act==='rollnow'){ui.tlOff=0;render();return}
+  if(act==='setptype'){d=store.projects[ui.id];var spt=ptypes().filter(function(t){return t.id===a.dataset.pt})[0];if(d&&spt){d.ptype=spt.id;d.scope=spt.internal?'internal':'';save('projects',ui.id)}render();return}
   if(act==='copyfrom'||act==='dismissnew'){d=store.projects[ui.id];
     if(act==='copyfrom'){var srcId=ui.from||Object.keys(store.projects).filter(function(x){return x!==ui.id})[0],src=store.projects[srcId];if(!src)return;
-      d.wiki=clone(src.wiki||{});d.team=clone(src.team||{});if(src.hide)d.hide=clone(src.hide);if(src.hideTabs)d.hideTabs=clone(src.hideTabs);
+      d.wiki=clone(src.wiki||{});d.team=clone(src.team||{});if(src.ptype){d.ptype=src.ptype;d.scope=src.scope||''}if(src.hide)d.hide=clone(src.hide);if(src.hideTabs)d.hideTabs=clone(src.hideTabs);
       toast('Copied the wiki and team from '+(src.name||'that project'))}
     delete d.isNew;save('projects',ui.id);render();return}
   if(act==='lb'){var lb=document.getElementById('lb');lb.innerHTML='<img src="'+esc(a.dataset.src)+'" alt="'+esc(a.dataset.name)+'"><button class="btn pri" data-act="lbclose">Close</button>';lb.classList.add('on');lb.querySelector('button').focus();return}
@@ -2617,6 +2651,9 @@ document.addEventListener('click',function(e){
   if(act==='rgroup'){ui.rgroup=a.dataset.g;render();return}
   if(act==='agroup'){ui.agroup=a.dataset.g;try{localStorage.setItem('lw.agroup',ui.agroup)}catch(e){}render();return}
   if(act==='addcheck'){var sel=ui.tpl==null?'0':String(ui.tpl),tp=templates();newRecord(sel==='blank'||!tp[+sel]?'checklist':'checklist:'+sel,ui.id,'');render();return}
+  if(act==='addptype'){ptypes().push({id:newId(),name:'',internal:false,fields:{status:true},offTabs:{},own:'1'});save('single','settings');render('single|settings|ptypes.'+(ptypes().length-1)+'.name');return}
+  if(act==='rmptype'){var pti=+a.dataset.i,PL=ptypes();if(ui.confirm!=='pt'+pti){ui.confirm='pt'+pti;render();return}ui.confirm=null;var gone2=PL[pti],to=PL[pti===0?1:0];
+    Object.keys(store.projects).forEach(function(id){var pj=store.projects[id];if(ptypeOf(pj).id===gone2.id){pj.ptype=to.id;pj.scope=to.internal?'internal':'';save('projects',id)}});PL.splice(pti,1);save('single','settings');render();toast('Removed the '+(gone2.name||'')+' type');return}
   if(act==='addtpl'){templates().push({id:newId(),name:'',items:[]});save('single','settings');render('single|settings|checklists.'+(templates().length-1)+'.name');return}
   if(act==='rmtpl'){var ti=+a.dataset.i;if(ui.confirm!=='tpl'+ti){ui.confirm='tpl'+ti;render();return}ui.confirm=null;templates().splice(ti,1);save('single','settings');render();return}
   if(act==='snap'){var model=modelDash();put('snaps',newId(),{date:today(),ts:Date.now(),json:JSON.stringify(model)});exportPdf(model,'Dashboard_snapshot_'+today()+'.pdf');if(!dl)toast('Snapshot saved under Archive and snapshots.');return}
