@@ -1069,11 +1069,14 @@ function getLayout(lid){var own=layouts().L[lid];
   if(lid==='person'&&own&&own.rows&&!hasKey(own,'sched'))own.rows.splice(Math.min(1,own.rows.length),0,L(null,{kind:'gantt',k:'sched',t:'Schedule'}));   /* person layouts edited before person schedules existed gain one */
   if(lid==='sheet'&&own&&own.rows&&!hasKey(own,'library'))own.rows.splice(Math.min(1,own.rows.length),0,L(null,LIB()));   /* layouts edited before the library existed gain it */
   return own||DEFAULTS[lid]||(lid.indexOf('pt_')===0?ptDefault(lid):null)||{rows:[]}}
-function formDef(type){var F=FORMS[type];if(F)return {name:F.name,title:F.title,rows:getLayout('f_'+type).rows,lid:'f_'+type};
+function rtSet(){var st=single('settings');if(!st.formNames||typeof st.formNames!=='object')st.formNames={};if(!st.formOff||typeof st.formOff!=='object')st.formOff={};return st}
+function recName(k){var n=rtSet().formNames[k];return n&&String(n).trim()?n:(FORMS[k]||{}).name||'Record'}
+function formOn(k){return !rtSet().formOff[k]}
+function formDef(type){var F=FORMS[type];if(F)return {name:recName(type),title:F.title,rows:getLayout('f_'+type).rows,lid:'f_'+type};
   var pg=pages('form').filter(function(p){return 'c_'+p.id===type})[0];if(pg)return {name:pg.name||'Custom form',title:'Title',rows:getLayout(type).rows,lid:type};
   return {name:'Record',title:'Title',rows:[],lid:null}}
-function formOpts(){return Object.keys(FORMS).filter(function(k){return k!=='checklist'}).map(function(k){return [k,FORMS[k].name]})
-  .concat(templates().map(function(t,i){return ['checklist:'+i,'Checklist: '+(t.name||'Untitled')]}),[['checklist','Checklist: blank']]).concat(pages('form').map(function(p){return ['c_'+p.id,p.name||'Custom form']}))}
+function formOpts(){var ck=recName('checklist');return Object.keys(FORMS).filter(function(k){return k!=='checklist'&&formOn(k)}).map(function(k){return [k,recName(k)]})
+  .concat(templates().map(function(t,i){return t.off?null:['checklist:'+i,ck+': '+(t.name||'Untitled')]}).filter(Boolean),formOn('checklist')?[['checklist',ck+': blank']]:[]).concat(pages('form').filter(function(p){return !p.off}).map(function(p){return ['c_'+p.id,p.name||'Custom form']}))}
 function newRecord(type,project,person){var r={type:type,title:'',date:today(),project:project||'',person:person||'',ts:Date.now(),d:{}};
   if(type.indexOf('checklist:')===0){var t=templates()[+type.slice(10)];r.type='checklist';if(t){r.title=t.name||'';r.d.items=fromTemplate(t).items}}
   return put('records',newId(),r)}
@@ -1692,7 +1695,7 @@ var QUICKREC=['meeting','general','sketch','site'];
 function openSheet(){var s=document.getElementById('capsheet'),fo=formOpts();
   s.innerHTML=capForm('capsheet|text','New item')+'<div class="eline"><span class="meta">Items that include a name or date become actions. Other items go to the inbox.</span></div>'
     +'<div class="capnew"><div class="capnh">New record <span class="meta">goes to the inbox until you file it</span></div><div class="capnb">'
-    +QUICKREC.filter(function(k){return FORMS[k]}).map(function(k){return '<button class="btn" data-act="capnew" data-type="'+k+'">'+esc(FORMS[k].name)+'</button>'}).join('')
+    +QUICKREC.filter(function(k){return FORMS[k]&&formOn(k)}).map(function(k){return '<button class="btn" data-act="capnew" data-type="'+k+'">'+esc(recName(k))+'</button>'}).join('')
     +'<select class="newrec" data-capnew="1" aria-label="Other record types">'+opts([['','Other\u2026']].concat(fo.filter(function(o){return QUICKREC.indexOf(o[0])<0})),'')+'</select></div></div>'
     +'<div class="eline"><span class="sp"></span><button class="mini" data-act="capclose">Cancel</button></div>';
   s.classList.add('on');document.documentElement.classList.add('sheet-open');var i=s.querySelector('input');if(i)i.focus()}
@@ -1855,7 +1858,7 @@ function actGroups(g){var t=today(),all=allActions().filter(function(a){return u
   return keys.map(boxOf).join('')}
 V.records=function(){
   var G=[['project','By project'],['person','By person'],['form','By type'],['date','By date']],g=ui.rgroup||'project';if(g==='folder')g='project';
-  var h='<div class="head"><h1>Records</h1><div class="tabs">'+G.map(function(x){return '<button data-act="rgroup" data-g="'+x[0]+'" aria-pressed="'+(g===x[0])+'">'+x[1]+'</button>'}).join('')+'</div><span class="sp"></span>'+newRecordCtl('','')+'</div>';
+  var h='<div class="head"><h1>Records</h1><div class="tabs">'+G.map(function(x){return '<button data-act="rgroup" data-g="'+x[0]+'" aria-pressed="'+(g===x[0])+'">'+x[1]+'</button>'}).join('')+'</div><span class="sp"></span>'+newRecordCtl('','')+'<button class="mini" data-go="rtypes">Record templates</button></div>';
   var ids=Object.keys(store.records);
   if(!ids.length||g==='date')return h+box('All records',recordList(function(){return true},'No records yet. Choose a type above to create meeting notes, a check-in, a design review record and more.'));
   var grp=function(list,keyOf,none){var groups={},order=[];ids.forEach(function(id){var k=keyOf(store.records[id]);if(!groups[k]){groups[k]=[];order.push(k)}groups[k].push(id)});
@@ -1883,15 +1886,36 @@ V.archive=function(){
   var sn=Object.keys(store.snaps).map(function(id){return {id:id,d:store.snaps[id]}}).sort(function(a,b){return (b.d.ts||0)-(a.d.ts||0)});
   return '<div class="head"><h1>Archive</h1></div><div class="g" style="grid-template-columns:repeat(2,minmax(0,1fr))">'+lst('projects','Archived projects')+lst('people','Archived people')+'</div>'
     +'<div class="g">'+box('Dashboard snapshots',sn.length?'<ul class="list">'+sn.map(function(x){return '<li><span class="d">'+fmtL(x.d.date)+'</span><span>Dashboard</span><span class="sp"></span><button class="mini" data-act="snappdf" data-id="'+x.id+'">PDF</button><button class="mini" data-act="snapword" data-id="'+x.id+'">Word</button><button class="mini" data-act="delsnap" data-id="'+x.id+'">Delete</button></li>'}).join('')+'</ul>':'<p class="empty">No snapshots yet. "Save a snapshot" on the dashboard freezes it as it stands.</p>','A frozen copy of the dashboard on the day it was saved')+'</div>'};
+V.rtypes=function(){var head='<div class="head"><h1>Record templates</h1><span class="sp"></span><button class="mini" data-go="records">Records</button></div>';
+  if(ui.edit)return head+editor(ui.edit);
+  var cnt={};Object.keys(store.records).forEach(function(id){var t=store.records[id].type;cnt[t]=(cnt[t]||0)+1});
+  var nrec=function(n){return n?n+(n===1?' record':' records'):'No records yet'};
+  var onBox=function(key,on){return '<label class="ptck" title="Offer it in the New record menus"><input type="checkbox" data-rton="'+key+'"'+(on?' checked':'')+'> In menus</label>'};
+  var all=pages(),forms=Object.keys(FORMS).map(function(k){return '<li><input class="ein" data-b="single|settings|formNames.'+k+'" data-k="rtn|'+k+'" data-rr="1" value="'+esc(recName(k))+'" placeholder="'+esc(FORMS[k].name)+'" aria-label="Name for '+esc(FORMS[k].name)+'" style="flex:0 1 240px">'
+        +'<span class="k">Built in'+(k==='checklist'?', the blank checklist':'')+' \u00B7 '+nrec(cnt[k])+'</span><span class="sp"></span>'+onBox('f|'+k,formOn(k))+'<button class="mini" data-act="edit" data-lid="f_'+k+'">Edit layout</button></li>'}).join('')
+    +all.map(function(p,i){if(p.scope!=='form')return '';var nk='single|layouts|pages.'+i+'.name';
+      return '<li><input class="ein" data-b="'+nk+'" data-k="'+nk+'" data-rr="1" value="'+esc(p.name)+'" placeholder="Name" aria-label="Name" style="flex:0 1 240px"><span class="k">Yours \u00B7 '+nrec(cnt['c_'+p.id])+'</span><span class="sp"></span>'
+        +onBox('c|'+i,!p.off)+'<button class="mini" data-act="edit" data-lid="c_'+p.id+'">Edit layout</button><button class="mini" data-act="rmpage" data-i="'+i+'">'+(ui.confirm==='pg'+i?'Confirm remove':'Remove')+'</button></li>'}).join('');
+  var tp=templates();
+  return head+'<p class="meta" style="margin:-4px 0 10px">Every type of record you can create. Rename them, change their layout, take them out of the New record menus, or add your own. Records already made keep their content.</p>'
+    +'<div class="g">'+box('Record types','<ul class="list rtl">'+forms+'</ul>'
+      +'<div class="head" style="padding:8px 9px 10px;margin:0;border-top:1px solid var(--rule)"><input class="ein" data-ui="rtname" data-k="ui|rtname" value="'+esc(ui.rtname||'')+'" placeholder="Name of a new record type, e.g. Site diary" aria-label="Name of a new record type" style="flex:1 1 220px"><button class="btn pri" data-act="addrtype">Create and lay it out</button></div>',
+      'Clear a built-in name to go back to the original')+'</div>'
+    +'<div class="head" style="margin-top:18px"><h2 style="font-size:1.3rem">Checklists</h2><span class="meta">Each one appears as \u201C'+esc(recName('checklist'))+': name\u201D when you create a record. Editing a list does not change checklists already started.</span></div>'
+    +tp.map(function(t,i){var nk='single|settings|checklists.'+i+'.name';
+      return '<div class="g"><section class="box"><div class="bt"><input data-b="'+nk+'" data-k="'+nk+'" data-rr="1" value="'+esc(t.name)+'" placeholder="Checklist name" aria-label="Checklist name" style="border:0;background:transparent;font-weight:600;font-size:.9rem;min-width:0;flex:0 1 260px">'
+        +'<span class="r">'+onBox('t|'+i,!t.off)+'<button class="mini" data-act="rmtpl" data-i="'+i+'">'+(ui.confirm==='tpl'+i?'Confirm remove':'Remove')+'</button></span></div>'
+        +table('single','settings','checklists.'+i+'.items',[{k:'t',label:'Check'}],{nohead:1})+'</section></div>'}).join('')
+    +'<div class="head"><button class="btn" data-act="addtpl">Add a checklist</button></div>'};
 V.settings=function(){
-  var tp=templates(),pg=pages(),SC=[['page','A page in the side menu'],['project','A tab on every project'],['person','A tab on every person'],['form','A type of record']];
+  var pg=pages(),SC=[['page','A page in the side menu'],['project','A tab on every project'],['person','A tab on every person'],['form','A type of record']];
   if(ui.edit)return '<div class="head"><h1>Settings</h1></div>'+editor(ui.edit);
   return '<div class="head"><h1>Settings</h1></div>'
-    +'<div class="g">'+box('Your own pages, tabs and record types',(pg.length?'<ul class="list">'+pg.map(function(p,i){var nk='single|layouts|pages.'+i+'.name';
+    +'<div class="g">'+box('Your own pages and tabs',(pg.some(function(p){return p.scope!=='form'})?'<ul class="list">'+pg.map(function(p,i){if(p.scope==='form')return '';var nk='single|layouts|pages.'+i+'.name';
         return '<li><input class="ein" data-b="'+nk+'" data-k="'+nk+'" data-rr="1" value="'+esc(p.name)+'" placeholder="Name" aria-label="Name" style="flex:0 1 240px"><span class="k">'+esc(SC.filter(function(x){return x[0]===p.scope})[0][1])+'</span><span class="sp"></span>'
-          +'<button class="mini" data-act="edit" data-lid="c_'+p.id+'">Edit layout</button><button class="mini" data-act="rmpage" data-i="'+i+'">'+(ui.confirm==='pg'+i?'Confirm remove':'Remove')+'</button></li>'}).join('')+'</ul>':'<p class="empty">Nothing added yet. Create a page, a tab or a form, then build its layout from sections.</p>')
-      +'<div class="head" style="padding:8px 9px 10px;margin:0;border-top:1px solid var(--rule)"><input class="ein" data-ui="pgname" data-k="ui|pgname" value="'+esc(ui.pgname||'')+'" placeholder="Name of the new page, tab or form" aria-label="Name of the new page, tab or form" style="flex:1 1 220px">'
-      +'<select class="ein" data-ui="pgscope" aria-label="What to create">'+opts(SC,ui.pgscope||'page')+'</select><button class="btn pri" data-act="addpage">Create</button></div>','Built from the same sections as the built-in pages')+'</div>'
+          +'<button class="mini" data-act="edit" data-lid="c_'+p.id+'">Edit layout</button><button class="mini" data-act="rmpage" data-i="'+i+'">'+(ui.confirm==='pg'+i?'Confirm remove':'Remove')+'</button></li>'}).join('')+'</ul>':'<p class="empty">Nothing added yet. Create a page or a tab, then build its layout from sections.</p>')
+      +'<div class="head" style="padding:8px 9px 10px;margin:0;border-top:1px solid var(--rule)"><input class="ein" data-ui="pgname" data-k="ui|pgname" value="'+esc(ui.pgname||'')+'" placeholder="Name of the new page or tab" aria-label="Name of the new page or tab" style="flex:1 1 220px">'
+      +'<select class="ein" data-ui="pgscope" aria-label="What to create">'+opts(SC.slice(0,3),ui.pgscope||'page')+'</select><button class="btn pri" data-act="addpage">Create</button></div>','Built from the same sections as the built-in pages')+'</div>'
     +(layouts().blocks.length?'<div class="g">'+box('Saved section blocks','<ul class="list">'+layouts().blocks.map(function(k,i){return '<li><span>'+esc(k.name||'Untitled')+'</span><span class="sp"></span><button class="mini" data-act="rmblock" data-i="'+i+'">Remove</button></li>'}).join('')+'</ul>','Add them from the bottom of any "Add a section" list in the layout editor')+'</div>':'')
         +'<div class="g">'+box('This device','<div style="--cols:210px 1fr"><div class="tr"><div class="lab">This looks like a</div><div class="ro">'+DEVNAME+'</div></div><div class="tr"><div class="lab">Open on</div><select class="in" data-startpage="1" aria-label="Start page on this device">'+opts(STARTS,startPref())+'</select></div></div>','Each device can open on a different page')+'</div>'
     +'<div class="g">'+box('Connection check','<div style="--cols:210px 1fr">'+[['Signed in as',window.lwAccount?esc(window.lwAccount.email||'Signed in')+' <button class="mini" style="margin-left:12px" data-lw-signout="1">Sign out</button>':'Not signed in'],['Saving your entries',capS.db==='yes'&&capS.user==='yes'?'Working':capS.db==='checking'?'Checking':'Not available here'],
@@ -1902,11 +1926,7 @@ V.settings=function(){
     +'<div class="g">'+box('Backup','<p class="empty">'+bkLine()+'</p><p class="empty">Back up as Word writes one Word document per project, person, record and workspace page into a folder you choose, replacing the previous copies. Make a folder of its own for it, such as OneDrive\\Workspace backup: the browser will not write straight into Downloads, Documents or Desktop. It includes the restore file. Download backup saves just the restore file. Restoring replaces what is here with the file\'s contents.</p><div class="head" style="padding:0 9px 10px;margin:0"><button class="btn pri" data-act="wordbk">Back up as Word</button>'+(window.showDirectoryPicker?'<button class="btn" data-act="wordbkdir">Choose a different folder</button>':'')+'<button class="btn" data-act="backup">Download backup</button>'
       +'<label class="btn" style="cursor:pointer">'+(ui.confirm==='restore'?'Choose the file to restore from':'Restore from backup')+'<input class="file" type="file" accept=".json,application/json" data-restore="1"></label></div>')+'</div>'
     +ptypesBox()
-    +'<div class="head" style="margin-top:18px"><h2 style="font-size:1.3rem">Checklist templates</h2><span class="meta">Start one as a record: New record \u2192 Checklist, from a project\u2019s Records tab, the + button or the New menu. Editing a template does not change checklists already started.</span></div>'
-    +tp.map(function(t,i){var nk='single|settings|checklists.'+i+'.name';
-      return '<div class="g"><section class="box"><div class="bt"><input data-b="'+nk+'" data-k="'+nk+'" value="'+esc(t.name)+'" placeholder="Checklist name" aria-label="Checklist name" style="border:0;background:transparent;font-weight:600;font-size:.9rem;min-width:0;flex:0 1 260px"><span class="r"><button class="mini" data-act="rmtpl" data-i="'+i+'">'+(ui.confirm==='tpl'+i?'Confirm remove':'Remove template')+'</button></span></div>'
-        +table('single','settings','checklists.'+i+'.items',[{k:'t',label:'Check'}],{nohead:1})+'</section></div>'}).join('')
-    +'<div class="head"><button class="btn" data-act="addtpl">Add a checklist template</button></div>';
+    +'<p class="meta" style="margin:14px 0 0">Record types and checklists are on their own page: <button class="link" data-go="rtypes">Record templates</button>.</p>'
 };
 
 /* ================= PDF export ================= */
@@ -2354,7 +2374,7 @@ function render(focusKey){
   if(!focusKey&&a&&a.dataset&&a.dataset.k&&(view.contains(a)||rail.contains(a))){fk=a.dataset.k;fv=a.value;try{ss=a.selectionStart;se=a.selectionEnd}catch(e){}}
   var cur=function(v,id){return ui.v===v&&(id==null||ui.id===id)?' aria-current="page"':''};
   var openA=allActions().filter(function(x){return !x.done}).length,nRec=Object.keys(store.records).length;
-  var nIn=inboxItems().length+unfiled().length,moreOpen=/^(reset|dump|archive)$/.test(ui.v)||ui.railMore;
+  var nIn=inboxItems().length+unfiled().length,moreOpen=/^(reset|dump|archive|rtypes)$/.test(ui.v)||ui.railMore;
   var R=function(v,l,n,on){return '<button data-go="'+v+'"'+(on||cur(v))+'>'+l+(n?'<span class="n">'+n+'</span>':'')+'</button>'};
   rail.innerHTML='<div class="brand">'+LOGO+'Workspace</div><input type="search" data-search="1" data-k="search" placeholder="Search" aria-label="Search the workspace" value="'+esc(ui.q)+'">'
     +'<select class="newsel" data-new="1" data-k="newsel" aria-label="Create something new"><option value="">New\u2026</option><option value="action">Action</option><option value="project">Project</option><option value="person">Person</option><optgroup label="Record">'+formOpts().map(function(o){return '<option value="r:'+esc(o[0])+'">'+esc(o[1])+'</option>'}).join('')+'</optgroup></select>'
@@ -2364,7 +2384,7 @@ function render(focusKey){
     +'<div class="sec"><button class="secb" data-go="team">People</button></div>'+sorted('people').map(function(x){return '<button data-go="person" data-id="'+x.id+'"'+cur('person',x.id)+'>'+esc(x.d.name||'Unnamed')+'</button>'}).join('')+'<button class="new" data-act="new" data-kind="people">+ New person</button>'
     +(pages('page').length?'<div class="sec">Your pages</div>'+pages('page').map(function(p){return '<button data-go="page" data-id="'+p.id+'"'+cur('page',p.id)+'>'+esc(p.name||'Untitled page')+'</button>'}).join(''):'')
     +'<button class="railmore" data-act="railmore" aria-expanded="'+!!moreOpen+'" style="margin-top:10px">More</button>'
-    +(moreOpen?R('reset','Monday planning')+R('dump','Friday review')+R('archive','Archive'):'')
+    +(moreOpen?R('reset','Monday planning')+R('dump','Friday review')+R('rtypes','Record templates')+R('archive','Archive'):'')
     +R('settings','Settings')+'<div id="status"></div>';
   status();tabbar();
   if(!V[ui.v])ui.v='dash';
@@ -2386,7 +2406,7 @@ function render(focusKey){
 function showCurrent(){try{var c=rail.querySelector('[aria-current]');if(c&&rail.scrollWidth>rail.clientWidth)rail.scrollLeft=Math.max(0,c.offsetLeft-rail.clientWidth/2+c.offsetWidth/2)}catch(e){}}
 /* ---- going back: each page change is remembered, so Back (the button, the browser, or a phone's back gesture) returns to where you were ---- */
 var hist=[];
-var TOPN={dash:'Dashboard',inbox:'Inbox',actions:'Actions',week:'Week',gsched:'Schedule',sched:'Resourcing',records:'Records',bd:'Business development',team:'Team',office:'Team',projects:'Projects',settings:'Settings',archive:'Archive',people:'Team',month:'Week',search:'Search',reset:'Monday planning',dump:'Friday review'};
+var TOPN={dash:'Dashboard',inbox:'Inbox',actions:'Actions',week:'Week',gsched:'Schedule',sched:'Resourcing',records:'Records',bd:'Business development',team:'Team',office:'Team',projects:'Projects',settings:'Settings',archive:'Archive',rtypes:'Record templates',people:'Team',month:'Week',search:'Search',reset:'Monday planning',dump:'Friday review'};
 function placeName(h){if(!h)return '';if(h.v==='project'){var pj=store.projects[h.id];return pj?(pj.name||'Untitled project'):''}if(h.v==='person'){var pe=store.people[h.id];return pe?(pe.name||'Unnamed'):''}
   if(h.v==='record'){var rc=store.records[h.id];return rc?(rc.title||formDef(rc.type).name):''}if(h.v==='today')return h.id?fmtD(h.id):'Today';if(h.v==='page'){var pg=pages('page').filter(function(x){return x.id===h.id})[0];return pg?(pg.name||'Page'):''}return TOPN[h.v]||''}
 function parentOf(){if(ui.v==='record'){var rc=store.records[ui.id];if(rc&&rc.project&&store.projects[rc.project])return {v:'project',id:rc.project,tab:'records'};if(rc&&rc.person&&store.people[rc.person])return {v:'person',id:rc.person};return {v:'records'}}
@@ -2431,6 +2451,9 @@ document.addEventListener('change',function(e){
   if(d.startpage){try{localStorage.setItem('lw.start',el.value)}catch(err){}toast('This device will open there next time');return}
   if(d.restore){restoreFile(el);return}
   if(d.hidetab){var tq=d.hidetab.split('|'),tdoc=store[tq[0]][tq[1]];if(tdoc){tdoc.hideTabs=tdoc.hideTabs||{};if(el.checked)delete tdoc.hideTabs[tq[2]];else tdoc.hideTabs[tq[2]]=1;save(tq[0],tq[1])}render();return}
+  if(d.rton){var rq=d.rton.split('|');if(rq[0]==='f'){rtSet().formOff[rq[1]]=!el.checked;if(el.checked)delete rtSet().formOff[rq[1]];save('single','settings')}
+    else if(rq[0]==='t'){var tt=templates()[+rq[1]];if(tt){if(el.checked)delete tt.off;else tt.off=true;save('single','settings')}}
+    else{var pp=pages()[+rq[1]];if(pp){if(el.checked)delete pp.off;else pp.off=true;save('single','layouts')}}render();return}
   if(d.pttab){var ptq=d.pttab.split('|'),ptt=ptypes()[+ptq[0]];if(ptt){ptt.offTabs=ptt.offTabs||{};if(el.checked)delete ptt.offTabs[ptq[1]];else ptt.offTabs[ptq[1]]=true;save('single','settings')}render();return}
   if(d.dgroup){dgroup=el.value;try{localStorage.setItem('lw.dgroup',dgroup)}catch(err){}render();return}
   if(d.capnew){var ct=el.value;el.value='';if(!ct)return;closeSheet();var ci2=newRecord(ct,'','');go('record',ci2);render('records|'+ci2+'|title');return}
@@ -2649,6 +2672,7 @@ document.addEventListener('click',function(e){
   if(act==='rmptype'){var pti=+a.dataset.i,PL=ptypes();if(ui.confirm!=='pt'+pti){ui.confirm='pt'+pti;render();return}ui.confirm=null;var gone2=PL[pti],to=PL[pti===0?1:0];
     Object.keys(store.projects).forEach(function(id){var pj=store.projects[id];if(ptypeOf(pj).id===gone2.id){pj.ptype=to.id;pj.scope=to.internal?'internal':'';save('projects',id)}});PL.splice(pti,1);save('single','settings');render();toast('Removed the '+(gone2.name||'')+' type');return}
   if(act==='addtpl'){templates().push({id:newId(),name:'',items:[]});save('single','settings');render('single|settings|checklists.'+(templates().length-1)+'.name');return}
+  if(act==='addrtype'){var rn=(ui.rtname||'').trim();if(!rn){toast('Give it a name first.');return}var rid2=newId();layouts().pages.push({id:rid2,name:rn,scope:'form'});ui.rtname='';ui.edit='c_'+rid2;editLayout(ui.edit);save('single','layouts');render();return}
   if(act==='rmtpl'){var ti=+a.dataset.i;if(ui.confirm!=='tpl'+ti){ui.confirm='tpl'+ti;render();return}ui.confirm=null;templates().splice(ti,1);save('single','settings');render();return}
   if(act==='snap'){var model=modelDash();put('snaps',newId(),{date:today(),ts:Date.now(),json:JSON.stringify(model)});exportPdf(model,'Dashboard_snapshot_'+today()+'.pdf');if(!dl)toast('Snapshot saved under Archive and snapshots.');return}
   if(act==='snappdf'){var s=store.snaps[a.dataset.id];if(s)exportPdf(s.json?JSON.parse(s.json):s.model,'Dashboard_snapshot_'+s.date+'.pdf');return}
