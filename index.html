@@ -484,7 +484,8 @@ input[type=date].empty:not(:focus)::-webkit-calendar-picker-indicator{opacity:.3
 .list .ck{width:18px; flex:none; display:inline-flex; justify-content:center}
 .list .ck.nb::before{content:"\2022"; color:var(--muted)}
 .list.done .tick{color:var(--muted); width:18px; text-align:center}
-.list.done li > span:nth-child(2){color:var(--muted); text-decoration:line-through}
+.list.done li > span:nth-child(2){color:var(--muted)}
+.list.done li > span:nth-child(2):not(.grow),.list.done .dt{text-decoration:line-through}
 .list.due .d{min-width:0; white-space:nowrap}
 .list li:has(> .ck input:checked){opacity:.45}
 .inbox li{flex-direction:column; align-items:stretch; gap:5px}
@@ -726,9 +727,11 @@ body.gdragging{cursor:grabbing; user-select:none; -webkit-user-select:none}
 .hidewrap > .hidetog{position:absolute; top:5px; right:8px; z-index:3; background:var(--sheet); border:1px solid var(--ink); border-radius:2px; padding:1px 8px; text-decoration:none}
 .hidewrap.off > :not(.hidetog){opacity:.35}
 .hidenote{font-size:.78rem; color:var(--muted); margin:6px 0 0}
-.aupd{display:block; font-size:.76rem; color:var(--muted); margin-top:1px; overflow-wrap:anywhere}
+.aupd{display:block; font-size:.78rem; color:var(--muted); margin-top:2px; overflow-wrap:anywhere; white-space:pre-wrap; line-height:1.4}
+.aupdh{display:block; font-size:.68rem; color:var(--muted); margin-top:2px}
+ul.done .grow{flex:1; min-width:0}
 .aupd::before{content:"\21B3  "}
-.aupdin{display:block; width:100%; margin-top:3px; font-size:.8rem; padding:3px 6px; border:1px solid var(--line); border-radius:2px; background:var(--sheet)}
+.aupdin{display:block; width:100%; margin-top:4px; font:inherit; font-size:.82rem; line-height:1.4; padding:5px 7px; border:1px solid var(--line); border-radius:2px; background:var(--sheet); resize:vertical; min-height:3.2em}
 .aupdb{all:unset; cursor:pointer; color:var(--muted); font-size:.8rem; padding:0 4px; opacity:0}
 li:hover > .aupdb,.aupdb:focus-visible{opacity:1}
 @media (pointer:coarse){.aupdb{opacity:.6}}
@@ -974,7 +977,7 @@ var KV=function(k,t,items,lw){return {kind:'kv',k:k,t:t,lw:lw,items:items.map(fu
 var TICKS=function(k,t,hint){return T(k,t,TICK,{nohead:1,simple:1,hint:hint})};
 var INK=function(k,t,h){return {kind:'ink',k:k,t:t,ih:h||420}};
 var FILES=function(t){return {kind:'files',k:'files',t:t||'Photos and files'}};
-var ACTIONS=function(t){return T('actions',t||'Actions',[{k:'done',type:'check',w:'34px',label:'Done'},{k:'t',label:'Action',w:'2fr'},{k:'who',label:'Who',type:'who',w:'.7fr'},{k:'due',label:'Due',type:'date',w:'132px'},{k:'upd',label:'Update',w:'1.2fr'}],{wide:1,flag:'late'})};
+var ACTIONS=function(t){return T('actions',t||'Actions',[{k:'done',type:'check',w:'34px',label:'Done'},{k:'t',label:'Action',w:'2fr'},{k:'who',label:'Who',type:'who',w:'.7fr'},{k:'due',label:'Due',type:'date',w:'132px'},{k:'upd',label:'Update or close-out note',head:'Notes',type:'area',w:'1.4fr'}],{wide:1,flag:'late'})};
 var L=function(w){var cols=[].slice.call(arguments,1),r={cols:cols.map(function(c){return {b:Array.isArray(c)?c:[c]}})};if(w)r.w=w;return r};
 var FLAGS={late:isLate,vendor:function(r){return !!(r.due&&!r.rec&&r.due<today())}};
 function isLate(r){return !!(r.due&&!r.done&&r.due<today())}
@@ -1515,7 +1518,8 @@ function pushKey(key){var q=key.split('|'),doc=store[q[0]]&&store[q[0]][q[1]],ar
 function dueHtml(items){var t=today();return '<ul class="list due">'+items.map(function(x){var late=x.d<t;
   return '<li>'+(x.bind?'<span class="ck"><input type="checkbox" data-l="'+x.bind+'" data-k="due|'+x.bind+'" data-rr="1" aria-label="Done: '+esc(x.t)+'"></span>':'<span class="ck nb"></span>')
     +'<span class="d'+(late?' late-t':'')+'">'+(x.d===t?'Today':fmtD(x.d)+(late?' overdue':''))+'</span>'+(x.kind?'<span class="tag">'+esc(KINDN[x.kind])+'</span>':'')+'<button class="link"'+goAttr(x.go)+'>'+esc(x.t)+'</button>'+(x.who?'<span class="k">'+esc(x.who)+'</span>':'')+'</li>'}).join('')+'</ul>'}
-function doneHtml(items,empty){return items.length?'<ul class="list done">'+items.map(function(x){return '<li><span class="tick" aria-hidden="true">\u2713</span><span>'+esc(x.t)+'</span><span class="sp"></span><span class="k">'+esc(x.src||'')+'</span></li>'}).join('')+'</ul>':'<p class="empty">'+empty+'</p>'}
+function doneHtml(items,empty){return items.length?'<ul class="list done">'+items.map(function(x){var q=String(x.k||'').split('|'),doc=q.length>4&&store[q[0]]&&store[q[0]][q[1]],arr=doc&&get(doc,q[2]),row=arr&&arr[+q[3]],rk=row?q.slice(0,4).join('|'):null,y={t:x.t,upd:row&&row.upd||'',rowKey:rk,done:true};
+    return '<li><span class="tick" aria-hidden="true">\u2713</span><span class="grow"><span class="dt">'+esc(x.t)+'</span>'+updLine(y,{pre:'dn'})+'</span>'+(rk&&ui.updOpen!==rk?'<button class="aupdb nop" data-upd="'+rk+'" data-pre="dn" title="Add a close-out note" aria-label="Add a close-out note">\u270E</button>':'')+'<span class="k">'+esc(x.src||'')+'</span></li>'}).join('')+'</ul>':'<p class="empty">'+empty+'</p>'}
 function lastCheck(id){var best='';Object.keys(store.records).forEach(function(r){var x=store.records[r];if(x.type==='scheck'&&x.person===id&&(x.date||'')>best)best=x.date});
   ((store.people[id]||{}).checkins||[]).forEach(function(c){if((c.date||'')>best)best=c.date});return best}
 function attention(){var t=today(),items=dated(),pw=[];
@@ -1534,13 +1538,13 @@ var byDue=function(x,y){var a=x.due||'9999',b=y.due||'9999';return a<b?-1:a>b?1:
 function rowKey(bind){return bind?bind.slice(0,bind.lastIndexOf('|')):''}
 function starBtn(x){var k=rowKey(x.bind);return k?'<button class="star'+(x.pri?' on':'')+'" data-star="'+esc(k)+'" aria-pressed="'+!!x.pri+'" title="'+(x.pri?'Remove from priorities':'Make this a priority')+'" aria-label="'+(x.pri?'Remove from priorities':'Make this a priority')+'">'+(x.pri?'\u2605':'\u2606')+'</button>':''}
 function updLine(x,o){if(!x.rowKey)return '';var k=x.rowKey+'|upd';
-  if(ui.updOpen===x.rowKey)return '<input class="in aupdin" type="text" data-l="'+k+'" data-k="upd|'+(o.pre||'al')+'|'+k+'" data-updk="1" value="'+esc(x.upd||'')+'" placeholder="Short update, e.g. waiting on vendor drawings" aria-label="Update for '+esc(x.t)+'" maxlength="200" autocomplete="off">';
+  if(ui.updOpen===x.rowKey)return '<textarea class="in aupdin" rows="2" data-l="'+k+'" data-k="upd|'+(o.pre||'al')+'|'+k+'" data-updk="1" placeholder="'+(x.done?'Close-out note: what was done, where it is filed':'Update: where it is up to, what it is waiting on')+'" aria-label="Note for '+esc(x.t)+'" maxlength="2000">'+esc(x.upd||'')+'</textarea><span class="aupdh">Saves as you type. Tap elsewhere when finished.</span>';
   return x.upd?'<span class="aupd">'+esc(x.upd)+'</span>':''}
 function actLi(x,o){o=o||{};var t=today(),late=x.due&&x.due<t;
   return '<li>'+(x.bind?'<span class="ck"><input type="checkbox" data-l="'+x.bind+'" data-k="'+(o.pre||'al')+'|'+x.bind+'" data-rr="1"'+(x.done?' checked':'')+' aria-label="Done: '+esc(x.t)+'"></span>':'<span class="ck nb"></span>')+starBtn(x)
     +(x.kind?'<span class="tag">'+esc(KINDN[x.kind])+'</span>':'')
     +'<span class="grow">'+(x.own&&o.plain?esc(x.t):'<button class="link"'+goAttr(x.go||{v:'actions'})+'>'+esc(x.t)+'</button>')+(o.src&&!x.own?' <span class="k">'+esc(x.src||'')+'</span>':'')+(o.proj&&x.project&&store.projects[x.project]?' <span class="k">'+esc(store.projects[x.project].name||'')+'</span>':'')+updLine(x,o)+'</span>'
-    +(x.rowKey&&ui.updOpen!==x.rowKey?'<button class="aupdb nop" data-upd="'+x.rowKey+'" title="'+(x.upd?'Edit the update':'Add a short update')+'" aria-label="'+(x.upd?'Edit the update':'Add a short update')+'">\u270E</button>':'')
+    +(x.rowKey&&ui.updOpen!==x.rowKey?'<button class="aupdb nop" data-upd="'+x.rowKey+'" data-pre="'+(o.pre||'al')+'" title="'+(x.upd?'Edit the note':'Add an update or close-out note')+'" aria-label="'+(x.upd?'Edit the note':'Add an update or close-out note')+'">\u270E</button>':'')
     +(x.who?'<span class="k">'+esc(x.who)+'</span>':'')+(x.due?'<span class="d'+(late?' late-t':'')+'">'+(x.due===t?'Today':fmtS(x.due))+'</span>':'')+'</li>'}
 function addOwn(text,extra){var c=parseCap(text),row={t:c.t,who:c.who,due:c.due,project:c.p,kind:''};for(var k in extra)row[k]=extra[k];single('actions').list.push(row);save('single','actions');return row}
 SPECIAL.prio={web:function(b,fk){var a=allActions().filter(function(x){return x.pri&&!x.done}).sort(byDue);
@@ -1857,14 +1861,14 @@ V.actions=function(){
   var C='34px 30px 2fr .7fr 110px 1.3fr 1.2fr';
   var rows=rec.map(function(a){var late=isLate(a);
     return '<div class="tr" style="--cols:'+C+'">'+(a.bind?'<span class="ck"><input type="checkbox" data-l="'+a.bind+'" data-k="'+a.bind+'" data-rr="1"'+(a.done?' checked':'')+' aria-label="Done: '+esc(a.t)+'"></span>':'<span></span>')+'<span class="ck">'+starBtn(a)+'</span>'
-      +'<div class="ro">'+esc(a.t)+'</div><div class="ro">'+esc(a.who)+'</div><div class="ro'+(late?' late-t':'')+'">'+fmtD(a.due)+(late?' overdue':'')+'</div><div class="ro"><button class="link"'+goAttr(a.go)+'>'+esc(a.src)+'</button></div>'+(a.rowKey?'<input class="in" type="text" data-l="'+a.rowKey+'|upd" data-k="fr|'+a.rowKey+'|upd" value="'+esc(a.upd||'')+'" placeholder="Update" aria-label="Update for '+esc(a.t)+'">':'<div></div>')+'</div>'}).join('');
+      +'<div class="ro">'+esc(a.t)+'</div><div class="ro">'+esc(a.who)+'</div><div class="ro'+(late?' late-t':'')+'">'+fmtD(a.due)+(late?' overdue':'')+'</div><div class="ro"><button class="link"'+goAttr(a.go)+'>'+esc(a.src)+'</button></div>'+(a.rowKey?'<textarea class="in" rows="1" data-l="'+a.rowKey+'|upd" data-k="fr|'+a.rowKey+'|upd" placeholder="Update or close-out note" aria-label="Note for '+esc(a.t)+'">'+esc(a.upd||'')+'</textarea>':'<div></div>')+'</div>'}).join('');
   var AG=[['list','List'],['project','By project'],['person','By person'],['kind','By type'],['due','By due date']],g=ui.agroup||'list';
   var head='<div class="head"><h1>Actions</h1><div class="tabs">'+AG.map(function(x){return '<button data-act="agroup" data-g="'+x[0]+'" aria-pressed="'+(g===x[0])+'">'+x[1]+'</button>'}).join('')+'</div><span class="sp"></span>'
     +(g!=='list'?'<button class="mini" data-act="toggledone">'+(ui.showDone?'Hide done':'Show done')+'</button>':'')+pdfBtn+'</div>';
   if(g!=='list')return head+actGroups(g);
   return head
-    +'<div class="g">'+box('Your actions and follow-ups',table('single','actions','list',[{k:'done',type:'check',w:'34px',label:'Done'},{k:'pri',type:'star',w:'30px',label:'Priority',head:'★'},{k:'t',label:'Action',w:'2fr'},{k:'kind',label:'Type',type:'select',opts:KOPTS,w:'140px'},{k:'who',label:'Who',type:'who',w:'.7fr'},{k:'due',label:'Due',type:'date',w:'132px'},{k:'project',label:'Project',type:'select',opts:projOpts,w:'1fr'},{k:'upd',label:'Update',w:'1.2fr'}],{wide:1,flag:isLate,hideRow:oldDone}),'')+'</div>'
-    +'<div class="g">'+box('From records and your tables',(rows?'<div class="scroll"><div class="wide"><div class="tr th" style="--cols:'+C+'"><div></div><div>★</div><div>Action</div><div>Who</div><div>Due</div><div>Source</div><div>Update</div></div>'+rows+'</div></div>':'<p class="empty">'+(ui.showDone?'Nothing yet.':'Nothing open.')+' Actions written in records collect here, and so do rows from any table you mark in the layout editor.</p>'),
+    +'<div class="g">'+box('Your actions and follow-ups',table('single','actions','list',[{k:'done',type:'check',w:'34px',label:'Done'},{k:'pri',type:'star',w:'30px',label:'Priority',head:'★'},{k:'t',label:'Action',w:'2fr'},{k:'kind',label:'Type',type:'select',opts:KOPTS,w:'140px'},{k:'who',label:'Who',type:'who',w:'.7fr'},{k:'due',label:'Due',type:'date',w:'132px'},{k:'project',label:'Project',type:'select',opts:projOpts,w:'1fr'},{k:'upd',label:'Update or close-out note',head:'Notes',type:'area',w:'1.4fr'}],{wide:1,flag:isLate,hideRow:oldDone}),'')+'</div>'
+    +'<div class="g">'+box('From records and your tables',(rows?'<div class="scroll"><div class="wide"><div class="tr th" style="--cols:'+C+'"><div></div><div>★</div><div>Action</div><div>Who</div><div>Due</div><div>Source</div><div>Notes</div></div>'+rows+'</div></div>':'<p class="empty">'+(ui.showDone?'Nothing yet.':'Nothing open.')+' Actions written in records collect here, and so do rows from any table you mark in the layout editor.</p>'),
       'Changes here update the source record','<button class="mini" data-act="toggledone">'+(ui.showDone?'Hide done':'Show done')+'</button>')+'</div>';
 };
 /* the Actions page grouped like Records: every action, own and from records, filed by one key */
@@ -2617,7 +2621,7 @@ document.addEventListener('click',function(e){
   var ts=x.closest('[data-ts]');if(ts){var tq=ts.dataset.ts,tci=+tq.slice(tq.lastIndexOf('|')+1),tkey=tq.slice(0,tq.lastIndexOf('|')),tvv=ui.tv[tkey]||(ui.tv[tkey]={});
     if(tvv.s!==tci){tvv.s=tci;tvv.d='asc'}else if(tvv.d==='asc')tvv.d='desc';else{tvv.s=null;tvv.d=null}render();return}
   var tcl=x.closest('[data-tclr]');if(tcl){var tv3=ui.tv[tcl.dataset.tclr]||{};tv3.f='';tv3.cf={};render();return}
-  var ub=x.closest('[data-upd]');if(ub){ui.updOpen=ub.dataset.upd;var uli=ub.closest('li'),upre='al';if(uli){var ucb=uli.querySelector('input[type=checkbox][data-k]');if(ucb)upre=ucb.dataset.k.split('|')[0]}render('upd|'+upre+'|'+ub.dataset.upd+'|upd');return}
+  var ub=x.closest('[data-upd]');if(ub){ui.updOpen=ub.dataset.upd;var upre=ub.dataset.pre||'al';render('upd|'+upre+'|'+ub.dataset.upd+'|upd');return}
   var hsb=x.closest('[data-hidesec]');if(hsb){var hq=hsb.dataset.hidesec.split('|'),hdoc=store[hq[0]][hq[1]];if(hdoc){hdoc.hide=hdoc.hide||{};if(hdoc.hide[hq[2]])delete hdoc.hide[hq[2]];else hdoc.hide[hq[2]]=1;save(hq[0],hq[1])}render();return}
   var tal=x.closest('[data-tall]');if(tal){var tva=ui.tv[tal.dataset.tall]||(ui.tv[tal.dataset.tall]={});tva.all=!tva.all;render();return}
   var tfb=x.closest('[data-tf]');if(tfb){var tv2=ui.tv[tfb.dataset.tf]||(ui.tv[tfb.dataset.tf]={});tv2.o=!tv2.o;if(!tv2.o){tv2.f='';tv2.cf={}}render(tv2.o?'tf|'+tfb.dataset.tf:undefined);return}
