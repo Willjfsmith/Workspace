@@ -196,9 +196,9 @@ html.pen canvas.ink, html.finger canvas.ink, html.inking canvas.ink{touch-action
 .inkwrap{-webkit-user-select:none; user-select:none; -webkit-touch-callout:none}
 .rich.short{min-height:64px}
 .rt button[aria-pressed="true"]{background:var(--ink); color:var(--sheet); border-color:var(--ink)}
-#inkfs{position:fixed; inset:0; z-index:15; background:var(--board); overflow:auto; display:none; padding:calc(10px + env(safe-area-inset-top,0px)) 12px calc(30px + env(safe-area-inset-bottom,0px)); -webkit-overflow-scrolling:touch}
+#inkfs{position:fixed; inset:0; z-index:30; background:var(--board); overflow:auto; display:none; padding:calc(10px + env(safe-area-inset-top,0px)) 12px calc(30px + env(safe-area-inset-bottom,0px)); -webkit-overflow-scrolling:touch}
 #inkfs.on{display:block}
-.fsbar{display:flex; gap:12px; align-items:baseline; max-width:980px; margin:0 auto 8px}
+.fsbar{display:flex; gap:12px; align-items:center; max-width:980px; margin:0 auto 8px; position:sticky; top:0; z-index:3; background:var(--board); padding:6px 0}
 .fsbar span{color:var(--muted); font-size:.85rem}
 .fspage{max-width:980px; margin:0 auto; background:var(--sheet); border:1px solid var(--line); border-radius:5px; overflow:hidden}
 .fspage .inkwrap{border-top:0}
@@ -1154,7 +1154,7 @@ function rBox(kind,id,base,b){var p=(b.abs?'':base)+b.k,doc=store[kind][id],fk=k
   if(b.kind!=='special'&&isFolded(fk)){var fi=foldInfo(doc,p,b);if(fi){var b2={};for(var z in b)b2[z]=b[z];b2.hint=fi;b=b2}}
   if(b.kind==='special')return SPECIAL[b.sp]?SPECIAL[b.sp].web(b,fk,kind,id):'';
   if(b.kind==='area')return box(b.t,f(kind,id,p,{type:'area',rows:b.rows||3,label:b.t}),b.hint,'',b.h,fk);
-  if(b.kind==='rich')return '<div style="--minh:'+(kind==='records'?(b.minh||160):Math.min(b.minh||160,220))+'px">'+box(b.t,rich(kind,id,p,b.t),b.hint,'',b.h,fk)+'</div>';
+  if(b.kind==='rich')return '<div style="--minh:'+(kind==='records'?(b.minh||160):Math.min(b.minh||160,220))+'px">'+box(b.t,rich(kind,id,p,b.t),b.hint,kind==='single'&&id==='dash'?'<button class="mini nop" data-act="notes2rec" data-p="'+esc(p)+'" title="Move these notes into a new record, which waits in your inbox for filing">Make a record</button>':'',b.h,fk)+'</div>';
   if(b.kind==='kv')return box(b.t,lrows(kind,id,p,b.items,b.lw),b.hint,'',b.h,fk);
   if(b.kind==='gantt')return gBox(kind,id,p,b,fk);
   if(b.kind==='files')return box(b.t,filesBox(kind,id,p),b.hint,'',b.h,fk);
@@ -2671,6 +2671,11 @@ document.addEventListener('click',function(e){
   if(act==='menu'){document.documentElement.classList.toggle('menu-open');return}
   if(act==='msearch'){go('search');render('search2');return}
   if(act==='capsheet'){openSheet();return}
+  if(act==='notes2rec'){var np=a.dataset.p,dd=single('dash'),nh=dd[np]||'',nk=dd[np+'_ink'],hasInk=!!(nk&&nk.s&&nk.s.length);
+    if(!plain(nh).trim()&&!hasInk){toast('There is nothing in these notes yet.');return}
+    var nrid=newRecord('general','',''),nr=store.records[nrid];nr.title='Notes from the dashboard, '+fmtD(today());nr.d.notes=nh;if(hasInk)nr.d.notes_ink=clone(nk);save('records',nrid,true);
+    var was={h:nh,k:nk?clone(nk):null};dd[np]='';delete dd[np+'_ink'];save('single','dash',true);
+    go('record',nrid);toast('Moved into a General notes record. File it from here or from the Inbox.',function(){dd[np]=was.h;if(was.k)dd[np+'_ink']=was.k;save('single','dash',true);remove('records',nrid);if(ui.v==='record'&&ui.id===nrid)goBack();else render()});return}
   if(act==='hideedit'){ui.hideEdit=ui.hideEdit===ui.id?null:ui.id;render();return}
   if(act==='back'){if(hist.length)history.back();else goBack();return}
   if(act==='capnew'){closeSheet();var cr=newRecord(a.dataset.type,'','');go('record',cr);render('records|'+cr+'|title');return}
