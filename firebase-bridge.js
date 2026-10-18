@@ -128,6 +128,7 @@ async function start() {
                   return F.setDoc(ref, { json, at: Date.now() });
                 },
                 delete() { return F.deleteDoc(ref); },
+                get() { return F.getDoc(ref).then((d) => (d.exists() ? decode(d) : null)); },
               };
             },
             onSnapshot(next, error) {
