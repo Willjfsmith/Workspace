@@ -700,7 +700,7 @@ body.gdragging{cursor:grabbing; user-select:none; -webkit-user-select:none}
 .logo .lt{fill:var(--ink)} .logo .lb{fill:var(--sheet)} .logo .ll{fill:#E5483D}
 #rail .brand{display:flex; align-items:center}
 #topbar .tt{display:inline-flex; align-items:center}
-/* ---- + sheet records and the inbox ---- */
+/* ---- + sheet documents and the inbox ---- */
 .capnew{border-top:1px solid var(--rule); margin-top:6px; padding-top:8px}
 .capnh{font-weight:600; font-size:.85rem; margin-bottom:6px}
 .capnh .meta{font-weight:400}
@@ -837,6 +837,12 @@ li:hover > .aupdb,.aupdb:focus-visible{opacity:1}
 .popbody .hf{grid-template-columns:repeat(3,minmax(0,1fr)) !important}
 .popbody .hf label:nth-child(-n+2){grid-column:span 1}
 @media print{#recpop{display:none !important}}
+.recent{display:flex; flex-wrap:wrap; gap:8px; align-items:stretch; margin:0 0 12px}
+.recent .rlab{flex-basis:100%; font-size:.72rem; letter-spacing:.06em; text-transform:uppercase; color:var(--muted)}
+.rcard2{flex:1 1 200px; max-width:320px; text-align:left; border:1px solid var(--rule); border-radius:6px; background:var(--board); padding:8px 10px; cursor:pointer; font:inherit; color:var(--ink); display:flex; flex-direction:column; gap:2px; min-width:0}
+.rcard2:hover{border-color:var(--line); background:var(--hit)}
+.rcard2 b{font-weight:600; font-size:.88rem; white-space:nowrap; overflow:hidden; text-overflow:ellipsis}
+.rcard2 span{font-size:.75rem; color:var(--muted); white-space:nowrap; overflow:hidden; text-overflow:ellipsis}
 </style>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
 <script src="firebase-config.js"></script>
@@ -919,7 +925,7 @@ function sorted(kind,arch){return Object.keys(store[kind]).map(function(id){retu
 function saveError(e){var c=e&&e.code;
   toast(c==='too_big'?'That entry is too large to save (over 1 MB). Remove some handwriting or split it up.':c==='permission-denied'?"That change wasn't saved. Sign out and back in, then try again.":c==='quota_exceeded'||c==='resource-exhausted'?'Storage is full. Delete something, then try again.':c==='invalid_argument'?"That change wasn't saved. Your access to this page may be view-only.":"That change wasn't saved. Check your connection and try again.")}
 /* ---- handwriting is saved in its own pieces ('ink' documents) once it gets big: a page can hold far more than one
-   database entry allows, and each new stroke only re-saves the last piece. Small handwriting stays inside its record. ---- */
+   database entry allows, and each new stroke only re-saves the last piece. Small handwriting stays inside its document. ---- */
 var INKC={}, inkKnown={}, inkSeen=false, INK_INLINE=40000, INK_CHUNK=250000;
 function isInk(v){return !!v&&typeof v==='object'&&!Array.isArray(v)&&typeof v.h==='number'&&(Array.isArray(v.s)||!!v.ref)}
 function inkWalk(o,path,cb){if(!o||typeof o!=='object')return;Object.keys(o).forEach(function(k){var v=o[k];if(!v||typeof v!=='object')return;var pth=path?path+'.'+k:k;
@@ -947,7 +953,7 @@ function flush(kind,id){
   dirty[key]=false;inflight[key]=true;saving++;status();
   var body=clone(store[kind][id]);body.updated=today();store[kind][id].updated=body.updated;
   var ik=dehydrate(kind,id,body),known=inkKnown[key]||(inkKnown[key]={}),dels=Object.keys(known).filter(function(c){return !ik.want[c]});
-  /* written in this order (the database keeps one device's writes in order): new pieces, then the record that points at them, then pieces no longer used */
+  /* written in this order (the database keeps one device's writes in order): new pieces, then the document that points at them, then pieces no longer used */
   var jobs=ik.writes.map(function(w){known[w.cid]=1;return root.collection('ink').doc(w.cid).set({s:w.s}).then(function(){INKC[w.cid]=w.s})});
   jobs.push(root.collection(kind).doc(id).set(body));
   dels.forEach(function(c){delete known[c];jobs.push(root.collection('ink').doc(c).delete().then(function(){delete INKC[c]},function(){}))});
@@ -1214,7 +1220,7 @@ var BD=[L(null,T('pipeline','Pipeline',[{k:'opp',label:'Opportunity',w:'1.4fr'},
 var OFFICE=[L(null,T('items','Team and business actions',[{k:'done',type:'check',w:'34px',label:'Done'},{k:'t',label:'Item',w:'2fr'},{k:'who',label:'Owner',type:'who',w:'.7fr'},{k:'due',label:'Due',type:'date',w:'132px'}],{wide:1,flag:'late',feed:1})),
   L(null,T('improve','Improvements',[{k:'t',label:'Idea or annoyance',w:'2fr'},{k:'area',label:'Area (standards, templates, tools)'},{k:'status',label:'Status',type:'select',optsRef:'IMPST',w:'118px'}],{wide:1})),
   L(null,R('notes','Notes',null,160))];
-/* dated records: the forms that get created and filed */
+/* dated documents: the forms that get created and filed */
 var CKCOLS=[{k:'done',type:'check',w:'34px',label:'Done',rr:1},{k:'t',label:'Check',w:'2fr'},{k:'na',type:'check',w:'40px',label:'N/A',rr:1},{k:'by',label:'By',w:'.45fr'},{k:'on',label:'Date',type:'date',w:'120px'},{k:'note',label:'Note'}];
 var RGROUPS=[['notes','Notes and meetings',['meeting','call','general','sketch']],['project','Projects and design',['pcheck','decision','brief','options','calc','review','proposal']],
   ['site','Site',['site','siteday']],['people','People',['scheck','interview','handover']]];
@@ -1222,10 +1228,10 @@ var FORMS={
   meeting:{name:'Meeting notes',title:'Meeting',rows:[L([1,1.6],KV('info','Meeting',[['time','Time'],['location','Location'],['next','Next meeting','date']],'96px'),[A('attendees','Attendees',2),A('apologies','Apologies',1)]),L(null,{kind:'agenda',k:'agenda',t:'Agenda and notes'}),L(null,ACTIONS()),L(null,FILES('Attachments'))]},
   general:{name:'General notes',title:'Subject',rows:[L(null,R('notes','Notes',null,360))]},
   sketch:{name:'Sketch notes',title:'Subject',link:'project',rows:[L(null,INK('sketch','Sketch',640)),L(null,R('notes','Notes',null,120))]},
-  pcheck:{name:'Project check-in',title:'With',link:'project',rows:[L(null,A('summary','Summary',2,'Shows in the record list')),
+  pcheck:{name:'Project check-in',title:'With',link:'project',rows:[L(null,A('summary','Summary',2,'Shows in the document list')),
     L(null,KV('nums','Status',[['hours','Hours spent'],['budget','Budget'],['forecast','Forecast'],['progress','Progress %']])),L([1,1],R('done','Done',null,90),R('next','Next',null,90)),
     L(null,R('issues','Issues and risks',null,90)),L([1,1],R('changes','Changes and holds',null,90),R('decisions','Decisions',null,90)),L(null,ACTIONS())]},
-  scheck:{name:'Staff check-in',title:'Topic',link:'person',rows:[L(null,A('summary','Summary',2,'Shows in the record list')),
+  scheck:{name:'Staff check-in',title:'Topic',link:'person',rows:[L(null,A('summary','Summary',2,'Shows in the document list')),
     L([1,1],R('wins','Wins',null,90),R('challenges','Challenges',null,90)),L(null,R('priorities','Priorities',null,90)),L([1,1],R('now','Workload now',null,90),R('look','Workload lookahead',null,90)),
     L([1,1],R('support','Support and development',null,90),R('feedback','Feedback given and received',null,90)),L(null,ACTIONS())]},
   brief:{name:'Design brief',title:'Subject',link:'project',rows:[L(null,R('objective','Objective',null,90)),L(null,R('scope','Scope and battery limits',null,90)),
@@ -1235,15 +1241,15 @@ var FORMS={
     L(null,T('optlist','Options or bidders',[{k:'t',label:'Option'}],{nohead:1,simple:1,hint:'Each one becomes a scoring column'})),
     L(null,T('criteria','Scoring',[{k:'c',label:'Criteria'}],{wide:1,matrix:1,hint:'Score each option, for example 1 to 5. A blank weight counts as 1.'})),
     L(null,R('preferred','Preferred option and why',null,90)),L(null,T('questions','Open questions and next steps',[{k:'done',type:'check',w:'34px',label:'Done'},{k:'t',label:'Question or next step',w:'2fr'},{k:'who',label:'Who',type:'who',w:'.7fr'},{k:'due',label:'Due',type:'date',w:'132px'}],{wide:1,feed:1}))]},
-  calc:{name:'Calc sheet',title:'Subject',link:'project',rows:[L(null,KV('who','Record',[['no','Calc no.'],['by','By'],['chk','Checked by'],['chkon','Checked on','date'],['chkst','Check status','select','CHKST']])),L(null,R('basis','Basis: purpose, codes, inputs, assumptions',null,90)),L(null,INK('hand','Hand calculation',520)),
+  calc:{name:'Calc sheet',title:'Subject',link:'project',rows:[L(null,KV('who','Details',[['no','Calc no.'],['by','By'],['chk','Checked by'],['chkon','Checked on','date'],['chkst','Check status','select','CHKST']])),L(null,R('basis','Basis: purpose, codes, inputs, assumptions',null,90)),L(null,INK('hand','Hand calculation',520)),
     L(null,T('lines','Calculation',[{k:'ref',label:'Ref',w:'.4fr'},{k:'work',label:'Working',type:'area',w:'2fr'},{k:'result',label:'Result',w:'.7fr'},{k:'unit',label:'Units',w:'.45fr'}],{wide:1}))]},
   review:{name:'Design review record',title:'Review',link:'project',rows:[L(null,KV('info','Review',[['type','Review type'],['docs','Documents and revision'],['attendees','Attendees'],['outcome','Outcome','select','OUTCOME'],['chair','Chair']],'150px')),
     L(null,REG('comments','Comments','Comment','Action or response')),L(null,FILES('Marked-up drawings and files'))]},
   site:{name:'Site visit and inspection',title:'Location or vendor',link:'project',rows:[L(null,KV('info','Visit',[['purpose','Purpose'],['present','Present']])),
     L(null,REG('obs','Observations','Observation','Action')),L(null,FILES('Photos and files')),L(null,R('notes','Notes',null,120)),L(null,ACTIONS('Punch items and actions'))]},
   checklist:{name:'Checklist',title:'Name',rows:[L(null,T('items','Checks',CKCOLS,{wide:1})),L(null,R('notes','Notes',null,120))]},
-  call:{name:'Phone call',title:'With',rows:[L(null,KV('info','Call',[['dir','Direction','select','DIR'],['due','Follow up by','date']])),L(null,A('summary','Summary',2,'Shows in the record list')),L(null,R('notes','Notes',null,160)),L(null,ACTIONS())]},
-  decision:{name:'Decision record',title:'Decision',link:'project',rows:[L(null,A('summary','What was decided',2,'Shows in the record list')),L(null,R('context','Context and why a decision was needed',null,90)),
+  call:{name:'Phone call',title:'With',rows:[L(null,KV('info','Call',[['dir','Direction','select','DIR'],['due','Follow up by','date']])),L(null,A('summary','Summary',2,'Shows in the document list')),L(null,R('notes','Notes',null,160)),L(null,ACTIONS())]},
+  decision:{name:'Decision record',title:'Decision',link:'project',rows:[L(null,A('summary','What was decided',2,'Shows in the document list')),L(null,R('context','Context and why a decision was needed',null,90)),
     L(null,T('opts','Options considered',[{k:'opt',label:'Option',w:'1.2fr'},{k:'pro',label:'For',type:'area',w:'1.4fr'},{k:'con',label:'Against',type:'area',w:'1.4fr'}],{wide:1})),
     L([1.3,1],R('why','Why this option',null,90),KV('who','Details',[['made','Made in','select','MEETINGS'],['by','Decided by'],['with','Consulted'],['review','Review by','date']])),L(null,ACTIONS())]},
   siteday:{name:'Site diary',title:'Day',link:'project',rows:[L(null,KV('cond','Conditions',[['weather','Weather'],['ground','Ground conditions'],['hours','Hours worked']])),
@@ -1251,7 +1257,7 @@ var FORMS={
     L(null,R('issues','Issues, delays, visitors and instructions',null,90)),L(null,FILES('Photos')),L(null,ACTIONS())]},
   interview:{name:'Interview notes',title:'Candidate',rows:[L(null,KV('info','Interview',[['role','Role'],['panel','Panel'],['source','How they applied']])),
     L(null,T('qs','Questions',[{k:'q',label:'Question',w:'1.2fr'},{k:'a',label:'Answer and evidence',type:'area',w:'2fr'},{k:'score',label:'Score',w:'.45fr'}],{wide:1})),
-    L([1,1],A('strengths','Strengths',3),A('concerns','Concerns',3)),L(null,A('summary','Recommendation',2,'Shows in the record list'))]},
+    L([1,1],A('strengths','Strengths',3),A('concerns','Concerns',3)),L(null,A('summary','Recommendation',2,'Shows in the document list'))]},
   handover:{name:'Handover note',title:'Handing over',rows:[L(null,KV('info','Handover',[['from','From'],['to','To'],['away','Away from','date'],['back','Back on','date']])),
     L(null,ACTIONS('Open items to hand over')),L(null,T('coming','Coming up',[{k:'t',label:'What',w:'2fr'},{k:'due',label:'Due',type:'date',w:'132px'},{k:'note',label:'Notes',w:'1.4fr'}],{wide:1})),
     L(null,T('contacts','Key contacts',[{k:'name',label:'Name'},{k:'role',label:'Role or company'},{k:'contact',label:'Phone or email'}],{wide:1})),
@@ -1310,12 +1316,12 @@ function recNumber(type,pid,exclude){var c=rtConf(type),pc=projCode(store.projec
   var no=f.replace('{type}',c.prefix).replace('{project}',pc).replace('{year}',today().slice(0,4)).replace('{n}',('00'+n).slice(-3)).replace(/--+/g,'-').replace(/^-|-$/g,'');return {no:no,seq:n}}
 function fillTitle(r){var c=rtConf(r.type);if(!c.title||r.title)return;var pr=store.projects[r.project];
   r.title=String(c.title).replace('{project}',pr?pr.name||'':'').replace('{date}',fmtD(r.date||today())).replace('{type}',formDef(r.type).name).replace('{no}',r.no||'').replace(/\s+[-\u2013|,]\s*$/,'').replace(/^\s*[-\u2013|,]\s+/,'').trim()}
-function recName(k){var n=rtSet().formNames[k];return n&&String(n).trim()?n:(FORMS[k]||{}).name||'Record'}
+function recName(k){var n=rtSet().formNames[k];return n&&String(n).trim()?n:(FORMS[k]||{}).name||'Document'}
 function formOn(k){return !rtSet().formOff[k]}
 function formDef(type){var F=FORMS[type];if(F)return {name:recName(type),title:F.title,rows:getLayout('f_'+type).rows,lid:'f_'+type};
   var pg=pages('form').filter(function(p){return 'c_'+p.id===type})[0];if(pg)return {name:pg.name||'Custom form',title:'Title',rows:getLayout(type).rows,lid:type};
-  return {name:'Record',title:'Title',rows:[],lid:null}}
-/* the record types offered when creating a record, grouped and ordered */
+  return {name:'Document',title:'Title',rows:[],lid:null}}
+/* the document types offered when creating a document, grouped and ordered */
 function formGroups(){var ck=recName('checklist'),seen={},out=[];
   RGROUPS.forEach(function(g){var items=g[2].filter(function(k){seen[k]=1;return FORMS[k]&&formOn(k)}).map(function(k){return [k,recName(k)]});
     pages('form').forEach(function(pg){if(!pg.off&&pg.grp===g[0])items.push(['c_'+pg.id,pg.name||'Custom form'])});if(items.length)out.push({group:g[1],items:items})});
@@ -1354,7 +1360,7 @@ var PT_DEFAULT=[{id:'client',name:'Client job',internal:false,fields:{client:tru
   {id:'personal',name:'Personal',internal:true,fields:{status:true},offTabs:{wiki:true,checks:true},own:'1'}];
 function ptypes(){var st=single('settings');if(!Array.isArray(st.ptypes)||!st.ptypes.length)st.ptypes=clone(PT_DEFAULT);return st.ptypes}
 function ptypeOf(p){var L=ptypes(),id=p&&p.ptype||(p&&p.scope==='internal'?'internal':'client');return L.filter(function(t){return t.id===id})[0]||L.filter(function(t){return t.id===(p&&p.scope==='internal'?'internal':'client')})[0]||L[0]}
-function ptypesBox(){var L=ptypes(),ct=pages('project'),TB=[['wiki','Project wiki'],['records','Records']].concat(ct.map(function(p){return ['c_'+p.id,p.name||'Untitled tab']}));
+function ptypesBox(){var L=ptypes(),ct=pages('project'),TB=[['wiki','Project wiki'],['records','Documents']].concat(ct.map(function(p){return ['c_'+p.id,p.name||'Untitled tab']}));
   var used=function(t){return Object.keys(store.projects).filter(function(id){return ptypeOf(store.projects[id]).id===t.id}).length};
   return '<div class="head" style="margin-top:18px"><h2 style="font-size:1.3rem">Project types</h2><span class="meta">Each type sets which header fields and tabs a project shows, and can have its own sheet layout. Choose a project\u2019s type from its Type field.</span></div>'
     +L.map(function(t,i){var P='single|settings|ptypes.'+i+'.',n=used(t),ck=function(path,lab){var v=get(t,path);return '<label class="ptck"><input type="checkbox" data-b="'+P+path+'" data-k="'+P+path+'" data-rr="1"'+(v?' checked':'')+'> '+esc(lab)+'</label>'};
@@ -1415,7 +1421,7 @@ function rBox(kind,id,base,b){var p=(b.abs?'':base)+b.k,doc=store[kind][id],fk=k
   if(b.kind!=='special'&&isFolded(fk)){var fi=foldInfo(doc,p,b);if(fi){var b2={};for(var z in b)b2[z]=b[z];b2.hint=fi;b=b2}}
   if(b.kind==='special')return SPECIAL[b.sp]?SPECIAL[b.sp].web(b,fk,kind,id):'';
   if(b.kind==='area')return box(b.t,f(kind,id,p,{type:'area',rows:b.rows||3,label:b.t}),b.hint,'',b.h,fk);
-  if(b.kind==='rich')return '<div style="--minh:'+(kind==='records'?(b.minh||160):Math.min(b.minh||160,220))+'px">'+box(b.t,rich(kind,id,p,b.t),b.hint,kind==='single'&&id==='dash'?'<button class="mini nop" data-act="notes2rec" data-p="'+esc(p)+'" title="Move these notes into a new record, which waits in your inbox for filing">Make a record</button>':'',b.h,fk)+'</div>';
+  if(b.kind==='rich')return '<div style="--minh:'+(kind==='records'?(b.minh||160):Math.min(b.minh||160,220))+'px">'+box(b.t,rich(kind,id,p,b.t),b.hint,kind==='single'&&id==='dash'?'<button class="mini nop" data-act="notes2rec" data-p="'+esc(p)+'" title="Move these notes into a new document, which waits in your inbox for filing">Make a document</button>':'',b.h,fk)+'</div>';
   if(b.kind==='kv')return box(b.t,lrows(kind,id,p,b.items,b.lw),b.hint,'',b.h,fk);
   if(b.kind==='gantt')return gBox(kind,id,p,b,fk);
   if(b.kind==='agenda')return agendaBox(kind,id,p,b,fk);
@@ -1446,21 +1452,21 @@ function hideNote(kind,id){var c=hiddenCount(store[kind][id]);if(ui.hideEdit===i
 var NEWKINDS=[['','Add a section'],['area','Text box'],['rich','Formatted notes'],['agenda','Agenda sections'],['ticks','Tick list'],['list','Simple list'],['table','Table'],['kv','Labelled rows'],['files','Photos and files'],['register','Register: numbered items with photos'],['ink','Handwriting or sketch area'],['links','Link library']];
 function isForm(lid){return lid.indexOf('f_')===0||pages('form').some(function(p){return 'c_'+p.id===lid})}
 function hasKey(lay,k){var hit=false;(lay.rows||[]).forEach(function(r){r.cols.forEach(function(c){c.b.forEach(function(b){if(b.k===k)hit=true})})});(lay.removed||[]).forEach(function(b){if(b.k===k)hit=true});return hit}
-function newKinds(lid,lay){var a=NEWKINDS.slice();if(lid==='dash'){[['gsched','Schedule across projects'],['done','Completed this week'],['attention','Needs attention'],['openacts','Actions'],['bdlist','Proposals and BD']].forEach(function(x){if(!hasKey(lay,'_'+x[0]))a.push(['sp:'+x[0],'Built-in: '+x[1]])})}layouts().blocks.forEach(function(k,i){a.push(['blk:'+i,'Your block: '+(k.name||'Untitled')])});if(isForm(lid)){if(!hasKey(lay,'actions'))a.push(['actions','Actions (these feed the Actions page)']);if(!hasKey(lay,'summary'))a.push(['summary','Summary line (shows in record lists)'])}return a}
+function newKinds(lid,lay){var a=NEWKINDS.slice();if(lid==='dash'){[['gsched','Schedule across projects'],['done','Completed this week'],['attention','Needs attention'],['openacts','Actions'],['bdlist','Proposals and BD']].forEach(function(x){if(!hasKey(lay,'_'+x[0]))a.push(['sp:'+x[0],'Built-in: '+x[1]])})}layouts().blocks.forEach(function(k,i){a.push(['blk:'+i,'Your block: '+(k.name||'Untitled')])});if(isForm(lid)){if(!hasKey(lay,'actions'))a.push(['actions','Actions (these feed the Actions page)']);if(!hasKey(lay,'summary'))a.push(['summary','Summary line (shows in document lists)'])}return a}
 var LOCKED={dash:['top3'],sheet:['sched','risks','changes','vendor'],person:['sched','plan','reg','checkins'],bd:['pipeline'],office:['items']};
 function locked(lid,b){return b.matrix||b.kind==='special'||b.kind==='gantt'||!!b.weeks||(LOCKED[lid]||[]).indexOf(b.k)>=0||(isForm(lid)&&(b.k==='actions'||b.k==='summary'))}
 function layoutInfo(lid){var N={dash:['Dashboard','this page'],sheet:['Project sheet','every project'],wiki:['Project wiki','every project'],person:['Person sheet','every person'],bd:['Business development','this page'],office:['Team','this page']};
   if(N[lid])return N[lid];if(lid.indexOf('pt_')===0){var pt=ptypes().filter(function(t){return 'pt_'+t.id===lid})[0];return [(pt&&pt.name||'Project type')+' sheet','every '+(pt&&pt.name||'')+' project']}
   if(lid.indexOf('own:')===0){var op=lid.split(':'),od=store[op[1]][op[2]]||{};return ['extra sections','only '+(od.name||'this one')+', below the shared layout']}
-  if(lid.indexOf('f_')===0)return [(FORMS[lid.slice(2)]||{name:'Form'}).name,'every record of this type, old and new'];
+  if(lid.indexOf('f_')===0)return [(FORMS[lid.slice(2)]||{name:'Form'}).name,'every document of this type, old and new'];
   var pg=pages().filter(function(p){return 'c_'+p.id===lid})[0]||{};
-  return [pg.name||'Untitled',pg.scope==='project'?'every project':pg.scope==='person'?'every person':pg.scope==='form'?'every record of this type':'this page']}
+  return [pg.name||'Untitled',pg.scope==='project'?'every project':pg.scope==='person'?'every person':pg.scope==='form'?'every document of this type':'this page']}
 function tgt(lid){if(lid.indexOf('own:')===0){var p=lid.split(':'),doc=store[p[1]][p[2]];if(!doc.own||!Array.isArray(doc.own.rows))doc.own={rows:[{cols:[{b:[]}]}]};return {kind:p[1],id:p[2],path:'own.',lay:doc.own,own:true}}
   return {kind:'single',id:'layouts',path:'L.'+lid+'.',lay:editLayout(lid)}}
 function editLayout(lid){var S=layouts();if(!S.L[lid]){S.L[lid]=clone(DEFAULTS[lid]||(lid.indexOf('pt_')===0?ptDefault(lid):null)||{rows:[{cols:[{b:[]}]}]});save('single','layouts')}return S.L[lid]}
 function newBox(type){var k='s'+newId();
   if(type==='actions')return clone(ACTIONS());
-  if(type==='summary')return A('summary','Summary',2,'Shows in the record list');
+  if(type==='summary')return A('summary','Summary',2,'Shows in the document list');
   if(type==='files')return {k:k,t:'Photos and files',kind:'files'};
   if(type==='register'){var rg=REG(k,'Register');return rg}
   if(type==='ink')return {k:k,t:'Handwriting',kind:'ink',ih:420};
@@ -1564,7 +1570,7 @@ function feedItems(){var out=[];
       out.push({t:row[fc.t.k],who:fc.w?row[fc.w.k]||'':'',due:fc.d?row[fc.d.k]||'':'',done:fc.c?!!row[fc.c.k]:false,pri:!!row.pri,tracked:!!row.mine,project:n.project,person:n.person,src:isAct?n.label:b.t.toLowerCase().indexOf(n.label.toLowerCase())===0?b.t:n.label+', '+b.t,go:n.go,upd:row.upd||'',steps:row.steps,kind:row.kind||'',rowKey:n.kind+'|'+n.id+'|'+n.base+b.k+'|'+i,
         bind:fc.c?n.kind+'|'+n.id+'|'+n.base+b.k+'|'+i+'|'+fc.c.k:null,dueBind:fc.d?n.kind+'|'+n.id+'|'+n.base+b.k+'|'+i+'|'+fc.d.k:null})})})})})});
   return out}
-/* which actions are yours: your own list always; rows from records and tables when their Who is one of your names (Settings), or you chose to track them */
+/* which actions are yours: your own list always; rows from documents and tables when their Who is one of your names (Settings), or you chose to track them */
 function myNames(){return String(single('settings').me||'').split(/[,;\n]+/).map(function(x){return x.trim().toLowerCase()}).filter(Boolean)}
 function whoIsMe(who,names){var w=String(who||'').trim().toLowerCase();if(!w)return null;return w.split(/\s*(?:[,\/&;+]|\band\b)\s*/).some(function(c){c=c.replace(/[()]/g,' ').trim();if(!c)return false;
   return names.some(function(n){return c===n||(' '+c+' ').indexOf(' '+n+' ')>=0})})}
@@ -1644,7 +1650,7 @@ function recordList(filter,emptyMsg){
   return '<ul class="list">'+recs.map(function(x){var r=x.d,p=store.projects[r.project],e=store.people[r.person],sum=recSummary(r);
     return '<li><span class="d">'+fmtL(r.date)+'</span>'+(r.no?'<span class="recno">'+esc(r.no)+'</span>':'')+'<button class="link" data-go="record" data-id="'+x.id+'">'+esc(r.title||'Untitled')+'</button><span class="k">'+esc(formDef(r.type).name)+(r.status==='draft'?', draft':'')+'</span>'
       +(sum?'<span>'+esc(sum)+'</span>':'')+'<span class="sp"></span><span class="k">'+esc([p&&p.name,e&&e.name].filter(Boolean).join(', '))+'</span></li>'}).join('')+'</ul>'}
-function newRecordCtl(project,person,folder){return '<select class="newrec" data-newrec="1" data-project="'+(project||'')+'" data-person="'+(person||'')+'" data-folder="'+esc(folder||'')+'" aria-label="New record">'+opts([['','New record\u2026']].concat(formGroups()),'')+'</select>'}
+function newRecordCtl(project,person,folder){return '<select class="newrec" data-newrec="1" data-project="'+(project||'')+'" data-person="'+(person||'')+'" data-folder="'+esc(folder||'')+'" aria-label="New document">'+opts([['','New document\u2026']].concat(formGroups()),'')+'</select>'}
 var V={};
 var SPECIAL={
   timeline:{web:function(b,fk){var ms=timeline(),kd=keyDates(),t=today();
@@ -1685,7 +1691,7 @@ V.dash=function(){
   var d=single('dash');if(ui.inkFirst&&inkOpen['single|dash|notes']==null)inkOpen['single|dash|notes']=true;
   if(ui.edit)return '<div class="head"><h1>Dashboard</h1></div>'+editor('dash');
   return '<div class="head"><h1>Dashboard</h1><span class="sp"></span>'+updated(d)+pdfBtn+editBtn('dash')+'</div>'
-    +continueChip()+ritualCards()+capForm('cap|text')
+    +continueChip()+recentStrip()+ritualCards()+capForm('cap|text')
     +rRows('single','dash','',getLayout('dash').rows);
 };
 /* ================= diary, inbox and the weekly rhythm ================= */
@@ -1741,10 +1747,10 @@ function parseCap(raw){var text=raw.trim(),out={t:text,p:'',who:'',due:''},m,td=
 function unfiled(){return Object.keys(store.records).filter(function(id){var r=store.records[id];return r&&!r.project&&!r.person&&!r.filed}).map(function(id){return {id:id,d:store.records[id]}})
   .sort(function(a,b){return (b.d.date||'').localeCompare(a.d.date||'')||(b.d.ts||0)-(a.d.ts||0)})}
 function unfiledHtml(){var u=unfiled();if(!u.length)return '';
-  return '<div class="g">'+box('Records to file','<ul class="list inbox">'+u.map(function(x){var r=x.d;
+  return '<div class="g">'+box('Documents to file','<ul class="list inbox">'+u.map(function(x){var r=x.d;
     return '<li><div class="ibt"><button class="link" data-go="record" data-id="'+x.id+'"><b>'+esc(r.title||'Untitled')+'</b></button> <span class="k">'+esc(formDef(r.type).name)+', '+esc(fmtL(r.date))+'</span>'+(recSummary(r)?' <span class="k">'+esc(recSummary(r))+'</span>':'')+'</div>'
       +'<div class="ibmeta">'+f('records',x.id,'project',{type:'select',opts:projGroups('Project\u2026'),rr:1,label:'File to project'})+f('records',x.id,'person',{type:'select',opts:[['','Person\u2026']].concat(peopleOpts().slice(1)),rr:1,label:'File to person'})
-      +'<button class="eb quiet" data-act="keepunf" data-id="'+x.id+'">Keep unfiled</button></div></li>'}).join('')+'</ul>',u.length+(u.length===1?' record':' records')+' with no project or person yet')+'</div>'}
+      +'<button class="eb quiet" data-act="keepunf" data-id="'+x.id+'">Keep unfiled</button></div></li>'}).join('')+'</ul>',u.length+(u.length===1?' document':' documents')+' with no project or person yet')+'</div>'}
 function inboxItems(){var ib=single('inbox');if(!Array.isArray(ib.items))ib.items=[];return ib.items}
 function capture(raw){var c=parseCap(raw),p=store.projects[c.p];
   if(c.due||c.who){var L=single('actions').list,row={t:c.t,who:c.who,due:c.due,project:c.p};L.push(row);save('single','actions');
@@ -1786,7 +1792,7 @@ function fileTo(i,where){var it=inboxItems(),x=it[i];if(!x||!String(x.t||'').tri
 var CHECKK=/^(done|closed)$|^[cd][a-z0-9]{8,}$/;
 function rowText(row){if(!row)return '';var c=row.t||row.what||row.goal||row.comment||row.opp||row.lesson;if(c)return String(c);
   for(var k in row){var v=row[k];if(typeof v==='string'&&v&&!isDate(v)&&!/^https?:/i.test(v))return v}return ''}
-function srcName(kind,id){if(kind==='records')return store.records[id]?recLabel(store.records[id]):'Record';if(kind==='projects'||kind==='people')return (store[kind][id]||{}).name||'';
+function srcName(kind,id){if(kind==='records')return store.records[id]?recLabel(store.records[id]):'Document';if(kind==='projects'||kind==='people')return (store[kind][id]||{}).name||'';
   return {dash:'Dashboard',actions:'Your actions',office:'Team actions',bd:'Business development'}[id]||(id.indexOf('pg_')===0?layoutInfo('c_'+id.slice(3))[0]:'')}
 function logDone(key,on){var q=key.split('|');if(!CHECKK.test(q[4]||''))return 0;var doc=store[q[0]]&&store[q[0]][q[1]];if(!doc)return 0;
   var arr=get(doc,q[2]),row=arr&&arr[+q[3]],L=single('donelog');if(!Array.isArray(L.items))L.items=[];
@@ -1812,7 +1818,7 @@ function attentionHtml(){var A=attention(),li='';
   if(A.inbox)li+='<li><span class="ck nb"></span><span>'+A.inbox+' '+(A.inbox===1?'item':'items')+' in the inbox</span><span class="sp"></span><button class="mini" data-go="inbox">Review</button></li>';
   A.proj.forEach(function(x){li+='<li><span class="ck nb"></span><button class="link" data-go="project" data-id="'+x.id+'">'+esc(x.name)+'</button><span class="late-t">'+esc(x.t)+'</span></li>'});
   A.people.forEach(function(x){var l=lastCheck(x.id);li+='<li><span class="ck nb"></span><button class="link" data-go="person" data-id="'+x.id+'">'+esc(x.d.name||'Unnamed')+'</button><span class="k">'+(l?'last check-in '+fmtD(l):'no check-in yet')+'</span></li>'});
-  var nu=unfiled().length;if(nu)li+='<li><span class="ck nb"></span><button class="link" data-go="inbox">'+nu+(nu===1?' record':' records')+' to file</button><span class="k">no project or person yet</span></li>';
+  var nu=unfiled().length;if(nu)li+='<li><span class="ck nb"></span><button class="link" data-go="inbox">'+nu+(nu===1?' document':' documents')+' to file</button><span class="k">no project or person yet</span></li>';
   var h=(A.due.length?dueHtml(A.due):'')+(li?'<ul class="list">'+li+'</ul>':'');
   return h||'<p class="empty">No items require attention.</p>'}
 /* one line for an action, wherever actions are listed: tick, star, type, text, who, due */
@@ -1879,7 +1885,7 @@ SPECIAL.attention={web:function(b,fk){return box(b.t,attentionHtml(),'','','',fk
 function rcard(k,t,s){return '<p class="rline nop"><b>'+t+'</b><span class="rlt"> not yet completed this week.</span> <button class="mini" data-go="'+k+'">Start</button><button class="mini quiet" data-act="rskip" data-r="'+k+'">Skip this week</button></p>'}
 function ritualCards(){var n=new Date(),dow=n.getDay(),w=weekDoc(),h='';
   if(dow>=1&&dow<=3&&!w.resetDone)h+=rcard('reset','Monday planning','Plan the week: dates, inbox, priorities, projects and people.');
-  if((dow===5||dow===6||dow===0||(dow===4&&n.getHours()>=15))&&!w.dumped)h+=rcard('dump','Friday review','Record notes for the week, review completed work and carry open items forward.');
+  if((dow===5||dow===6||dow===0||(dow===4&&n.getHours()>=15))&&!w.dumped)h+=rcard('dump','Friday review','Jot down notes for the week, review completed work and carry open items forward.');
   return h}
 function ritualChip(k,label,val,mon){return '<span><b>'+label+'</b> '+(val&&val!=='skipped'?'done '+fmtD(val)+' <button class="mini" data-go="'+k+'" data-id="'+mon+'">Open</button>':val==='skipped'?'skipped':mon<=mondayOf()?'<button class="mini" data-go="'+k+'" data-id="'+mon+'">Start</button>':'not yet')+'</span>'}
 
@@ -1904,7 +1910,7 @@ V.today=function(){var dd=isDate(ui.id)?ui.id:today(),t=today(),isT=dd===t,D=at(
     +'<div class="dnav nop"><button class="btn" data-act="dayshift" data-n="-1" aria-label="Previous day">\u2190</button>'+(isT?'':'<button class="btn" data-act="daytoday">Today</button>')
     +'<button class="btn" data-act="dayshift" data-n="1" aria-label="Next day">\u2192</button><input type="date" class="ein" data-dayjump="1" value="'+dd+'" aria-label="Go to a date">'+pdfBtn+'</div></div>';
   h+='<div class="g">'+box(isT?'Due and overdue':'Due this day',due.length?dueHtml(due):'<p class="empty">'+(isT?'Nothing due today.':'Nothing was due this day.')+'</p>','','','','day:due')+'</div>';
-  h+='<div class="g" style="grid-template-columns:repeat(2,minmax(0,1fr))">'+box('Made this day',recs.length?recordList(function(x){return recs.indexOf(x.id)>=0},''):'<p class="empty">No records this day.</p>','','','','day:recs')
+  h+='<div class="g" style="grid-template-columns:repeat(2,minmax(0,1fr))">'+box('Made this day',recs.length?recordList(function(x){return recs.indexOf(x.id)>=0},''):'<p class="empty">No documents this day.</p>','','','','day:recs')
     +box('Completed this day',doneHtml(done,'Nothing completed this day.'),'','','','day:done')+'</div>';
   if(plain(dob.notes)||oldInk)h+='<div class="g">'+box('Notes kept on this day',rich('days',dd,'notes','Notes kept on this day'),'From when each day had its own notes',plain(dob.notes)?'<button class="mini" data-act="movenotes" data-d="'+dd+'">Move the text into general notes</button>':'','','day:old')+'</div>';
   return h};
@@ -1990,7 +1996,7 @@ V.projects=function(){var sp=projSplit(),ar=sorted('projects',true).length;
         +((x.d.dash||{}).focus?'<span class="pf">'+esc(x.d.dash.focus)+'</span>':'')+(ru.length?'<span class="chips">'+ru.map(function(r){return '<span'+(r[1]?' class="warn"':'')+'>'+esc(r[0])+'</span>'}).join('')+'</span>':'')+'</button>'};
   return '<div class="dayhead"><div class="dh"><span class="dow">'+sp.ext.length+' active</span><h1>Projects</h1></div><div class="dnav nop"><button class="btn" data-act="new" data-kind="projects">New project</button><button class="btn" data-act="new" data-kind="projects" data-scope="internal">New internal project</button></div></div>'
     +'<h2 class="grh">External projects</h2>'+(sp.ext.length?'<div class="cards">'+sp.ext.map(card).join('')+'</div>':'<p class="empty">No projects yet. "New project" starts one.</p>')
-    +'<h2 class="grh">Internal</h2>'+(sp.int.length?'<div class="cards">'+sp.int.map(card).join('')+'</div>':'<p class="empty">Internal projects hold work that is not for a client, such as Team, Business development or Admin. Records and actions file to them in the same way.</p>')
+    +'<h2 class="grh">Internal</h2>'+(sp.int.length?'<div class="cards">'+sp.int.map(card).join('')+'</div>':'<p class="empty">Internal projects hold work that is not for a client, such as Team, Business development or Admin. Documents and actions file to them in the same way.</p>')
     +(ar?'<p class="empty"><button class="mini" data-go="archive">'+ar+' archived</button></p>':'')};
 function teamCards(){var t=today();return sorted('people').map(function(x){var nm=(x.d.name||'').trim().toLowerCase(),
     acts=nm?everyActions().filter(function(a){return !a.done&&String(a.who||'').trim().toLowerCase()===nm}):[],next=acts.filter(function(a){return a.due}).sort(function(a,b){return a.due<b.due?-1:1})[0],
@@ -2004,7 +2010,7 @@ V.team=function(){var pe=sorted('people'),inName=function(x,n){var p=store.proje
   return '<div class="head"><h1>Team</h1><span class="sp"></span>'+updated(single('office'))+pdfBtn+editBtn('office')+'<button class="btn" data-act="new" data-kind="people">New person</button></div>'
     +'<div class="g">'+box('People',pe.length?'<div class="cards tcards">'+teamCards()+'</div>':'<p class="empty">No people yet. "New person" adds someone.</p>',pe.length?pe.length+' in the team'+(due?', '+due+' due a check-in':''):'','','','team:people')+'</div>'
     +rRows('single','office','',getLayout('office').rows)
-    +'<div class="g">'+box('Team records',recordList(trec,'Records filed to the internal Team project show here, such as team meetings, training notes and admin.'),'','<span class="nrc">'+newRecordCtl('','','Team')+'</span>','','team:recs')+'</div>'};
+    +'<div class="g">'+box('Team documents',recordList(trec,'Documents filed to the internal Team project show here, such as team meetings, training notes and admin.'),'','<span class="nrc">'+newRecordCtl('','','Team')+'</span>','','team:recs')+'</div>'};
 V.people=function(){return V.team()};
 /* ---- bottom bar icons ---- */
 var ICO=function(d){return '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">'+d+'</svg>'};
@@ -2016,9 +2022,9 @@ function tabbar(){var tb=document.getElementById('tabbar');if(!tb)return;var on=
 var QUICKREC=['meeting','call','general','site'];
 function openSheet(){var s=document.getElementById('capsheet'),fo=formGroups().map(function(g){return {group:g.group,items:g.items.filter(function(o){return QUICKREC.indexOf(o[0])<0})}}).filter(function(g){return g.items.length});
   s.innerHTML=capForm('capsheet|text','New item')+'<div class="eline"><span class="meta">Items that include a name or date become actions. Other items go to the inbox.</span></div>'
-    +'<div class="capnew"><div class="capnh">New record <span class="meta">goes to the inbox until you file it</span></div><div class="capnb">'
+    +'<div class="capnew"><div class="capnh">New document <span class="meta">goes to the inbox until you file it</span></div><div class="capnb">'
     +QUICKREC.filter(function(k){return FORMS[k]&&formOn(k)}).map(function(k){return '<button class="btn" data-act="capnew" data-type="'+k+'">'+esc(recName(k))+'</button>'}).join('')
-    +'<select class="newrec" data-capnew="1" aria-label="Other record types">'+opts([['','Other\u2026']].concat(fo),'')+'</select></div></div>'
+    +'<select class="newrec" data-capnew="1" aria-label="Other document types">'+opts([['','Other\u2026']].concat(fo),'')+'</select></div></div>'
     +'<div class="eline"><span class="sp"></span><button class="mini" data-act="capclose">Cancel</button></div>';
   s.classList.add('on');document.documentElement.classList.add('sheet-open');var i=s.querySelector('input');if(i)i.focus()}
 function closeSheet(){var s=document.getElementById('capsheet');s.classList.remove('on');s.innerHTML='';document.documentElement.classList.remove('sheet-open')}
@@ -2089,24 +2095,24 @@ V.project=function(){
   var tab=function(k,l){if(!tabOn(d,k))return '';if(k!=='sheet'&&d.hideTabs&&d.hideTabs[k]&&ui.hideEdit!==id)return '';return '<button data-tab="'+k+'" aria-pressed="'+(ui.tab===k)+'">'+l+'</button>'};
   var ctabs=pages('project');if(ui.tab.indexOf('c_')===0&&!ctabs.some(function(p){return 'c_'+p.id===ui.tab}))ui.tab='sheet';
   var htabs=d.hideTabs||{},choosing=ui.hideEdit===id;if(htabs[ui.tab]&&!choosing)ui.tab='sheet';
-  var TABL=[['wiki','Project wiki'],['records','Records']].concat(ctabs.map(function(p){return ['c_'+p.id,p.name||'Untitled']})).filter(function(t){return tabOn(d,t[0])});
+  var TABL=[['wiki','Project wiki'],['records','Documents']].concat(ctabs.map(function(p){return ['c_'+p.id,p.name||'Untitled']})).filter(function(t){return tabOn(d,t[0])});
   var pt=ptypeOf(d);if(!tabOn(d,ui.tab))ui.tab='sheet';
   var lid=ui.tab==='sheet'?sheetLid(d):ui.tab==='wiki'||ui.tab.indexOf('c_')===0?ui.tab:null;
   var HF=[];if(pt.fields.client)HF.push(['client','Client',1.4]);if(pt.fields.phase)HF.push(['phase','Phase',.9,'select',PHASES]);if(pt.fields.status)HF.push(['status','Status',.8,'select',STATUS]);HF.push(['ptype','Type',.8,'select',ptypeOpts]);HF.push(['code','Code',.45]);
   var h='<div class="head"><h1 class="hname">'+mark(pt.fields.status?d.status:'')+' '+nameIn('projects',id,'Untitled project','Project name')+'</h1><span class="sp"></span>'+updated(d)+(ui.edit?'':'<button class="btn" data-act="newmeeting">Meeting</button>')+pdfBtn+(lid&&!ui.edit?editBtn(lid)+(ui.tab==='sheet'?'<button class="btn" data-act="edit" data-lid="own:projects:'+id+'">Add sections to this project only</button>':''):'')
     +(ui.edit?'':'<button class="btn" data-act="hideedit">Show or hide sections</button>')+'<button class="btn" data-act="archive" data-kind="projects">'+(d.archived?'Restore from archive':'Archive')+'</button><button class="btn danger" data-act="del" data-kind="projects">'+(ui.confirm==='del'?'Confirm delete':'Delete')+'</button></div>'
     +hfields('projects',id,HF)
-    +'<div class="tabs" style="margin-bottom:12px">'+tab('sheet','Project sheet')+tab('wiki','Project wiki')+tab('records','Records'+(recs?' '+recs:''))+ctabs.map(function(p){return tab('c_'+p.id,esc(p.name||'Untitled'))}).join('')+'</div>'+hideBar('projects',id,TABL);
+    +'<div class="tabs" style="margin-bottom:12px">'+tab('sheet','Project sheet')+tab('wiki','Project wiki')+tab('records','Documents'+(recs?' '+recs:''))+ctabs.map(function(p){return tab('c_'+p.id,esc(p.name||'Untitled'))}).join('')+'</div>'+hideBar('projects',id,TABL);
   if(ui.edit&&lid)return h+editor(ui.edit);
   var hn=hideNote('projects',id);
   if(ui.tab==='wiki')return h+rRows('projects',id,'wiki.',getLayout('wiki').rows)+hn;
   if(ui.tab.indexOf('c_')===0)return h+(rRows('projects',id,'x.'+ui.tab.slice(2)+'.',getLayout(ui.tab).rows)||'<p class="empty">This tab has no sections yet. Choose Edit layout to add some.</p>')+hn;
-  if(ui.tab==='records')return h+box('Records for this project',recordList(function(x){return x.d.project===id},'No records yet. Meeting notes, check-ins, reviews and site visits filed against this project appear here.'),'',newRecordCtl(id,''));
+  if(ui.tab==='records')return h+box('Documents for this project',recordList(function(x){return x.d.project===id},'No documents yet. Meeting notes, check-ins, reviews and site visits filed against this project appear here.'),'',newRecordCtl(id,''));
   if(ui.tab==='checks'){ui.tab='records';return V.project()}
   var others=Object.keys(store.projects).filter(function(x){return x!==id}).map(function(x){return [x,(store.projects[x].name||'Untitled project')+(store.projects[x].archived?' (archived)':'')]});
   var from=d.isNew?'<div class="g nop">'+box('New project','<div class="eline"><span class="meta">What kind of project?</span>'+ptypes().map(function(t){return '<button class="btn'+(pt.id===t.id?' pri':'')+'" data-act="setptype" data-pt="'+t.id+'">'+esc(t.name||'Untitled type')+'</button>'}).join('')+'</div>'
     +(others.length?'<div class="eline"><select class="ein" data-ui="from" aria-label="Project to copy from">'+opts(others,ui.from||others[0][0])+'</select><button class="btn" data-act="copyfrom">Copy its wiki, team and type</button></div>':'')
-    +'<div class="eline"><button class="btn" data-act="dismissnew">Done</button><span class="meta">Change the type later from the Type field. Edit types in Settings.</span></div>','Records and checklists stay with the original project'):'';
+    +'<div class="eline"><button class="btn" data-act="dismissnew">Done</button><span class="meta">Change the type later from the Type field. Edit types in Settings.</span></div>','Documents and checklists stay with the original project'):'';
   return h+from+rRows('projects',id,'',getLayout(sheetLid(d)).rows)+rRows('projects',id,'',(d.own||{}).rows)+hn;
 };
 V.person=function(){
@@ -2126,7 +2132,7 @@ V.person=function(){
       return '<div class="tr">'+(a.bind?'<span class="ck"><input type="checkbox" data-l="'+a.bind+'" data-k="pa|'+a.bind+'" data-rr="1" aria-label="Done: '+esc(a.t)+'"></span>':'<span></span>')+'<div class="ro">'+esc(a.t)+'</div><div class="ro'+(late?' late-t':'')+'">'+fmtD(a.due)+(late?' overdue':'')+'</div><div class="ro"><button class="link"'+goAttr(a.go||{v:'actions'})+'>'+esc(a.src||'')+'</button></div></div>'}).join('')+'</div>'
     :'<p class="empty">Nothing open. Actions with '+esc(d.name||'this person')+' in the Who column appear here.</p>','Any action with this name in its Who column','','','people:_acts');
   return h+rRows('people',id,'',getLayout('person').rows)+rRows('people',id,'',(d.own||{}).rows)+'<div class="g">'+acts+'</div>'
-    +'<div class="g">'+box('Records',recordList(function(x){return x.d.person===id},'No records yet. Staff check-ins filed against this person appear here with their summary.'),'',newRecordCtl('',id))+'</div>'+hn;
+    +'<div class="g">'+box('Documents',recordList(function(x){return x.d.person===id},'No documents yet. Staff check-ins filed against this person appear here with their summary.'),'',newRecordCtl('',id))+'</div>'+hn;
 };
 function allWork(open){var out=[];sorted('people').forEach(function(x){var rs=(x.d.sched||[]).map(function(r,i){return r&&r.label&&(!open||!r.done)?withSrc(r,'people|'+x.id+'|sched|'+i):null}).filter(Boolean);
     out.push({group:(x.d.name||'Unnamed')+(rs.length?'':' (nothing scheduled)'),go:{v:'person',id:x.id}});rs.forEach(function(r){out.push(r)})});
@@ -2137,7 +2143,7 @@ V.sched=function(){var rows=allWork(!ui.rall),n=rows.filter(function(r){return r
       '<button class="mini" data-act="rall">'+(ui.rall?'Hide finished':'Show finished')+'</button>','','sched:all')+'</div>'
     +(oldN?'<div class="g">'+box('Old twelve-week grid',hfields('single','sched',[['title','Project or team',1]])+table('single','sched','rows',colsOf(SCHED[0].cols[0].b[0],old),SCHED[0].cols[0].b[0]),'From before Resourcing became a chart. Copy anything you need into people\u2019s schedules.','','','sched:old')+'</div>':'')};
 V.bd=function(){var d=single('bd');if(ui.edit)return '<div class="head"><h1>Business development</h1></div>'+editor('bd');return '<div class="head"><h1>Business development</h1><span class="sp"></span>'+updated(d)+pdfBtn+editBtn('bd')+'</div>'+rRows('single','bd','',getLayout('bd').rows)
-  +'<div class="g">'+box('Proposal records',recordList(function(x){return x.d.type==='proposal'||(isInt(store.projects[x.d.project])&&String(store.projects[x.d.project].name||'').trim().toLowerCase()==='business development')},'Proposal notes records, and anything filed to the internal Business development project, show here.'),'','<button class="btn" data-act="newrec" data-type="proposal">New proposal notes</button>')+'</div>'};
+  +'<div class="g">'+box('Proposal documents',recordList(function(x){return x.d.type==='proposal'||(isInt(store.projects[x.d.project])&&String(store.projects[x.d.project].name||'').trim().toLowerCase()==='business development')},'Proposal notes documents, and anything filed to the internal Business development project, show here.'),'','<button class="btn" data-act="newrec" data-type="proposal">New proposal notes</button>')+'</div>'};
 V.office=function(){return V.team()};
 V.page=function(){var pg=pages('page').filter(function(p){return p.id===ui.id})[0];if(!pg){ui.v='dash';return V.dash()}
   var lid='c_'+pg.id,d=single('pg_'+pg.id);if(ui.edit)return '<div class="head"><h1>'+esc(pg.name||'Untitled page')+'</h1></div>'+editor(lid);
@@ -2155,28 +2161,28 @@ V.actions=function(){
   if(g!=='list')return head+actGroups(g);
   return head
     +'<div class="g">'+box('Your actions and follow-ups',table('single','actions','list',[{k:'done',type:'check',w:'34px',label:'Done'},{k:'pri',type:'star',w:'30px',label:'Priority',head:'★'},{k:'t',label:'Action',w:'2fr'},{k:'kind',label:'Type',type:'select',opts:KOPTS,w:'140px'},{k:'who',label:'Who',type:'who',w:'.7fr'},{k:'due',label:'Due',type:'date',w:'132px'},{k:'project',label:'Project',type:'select',opts:projOpts,w:'1fr'},{k:'upd',label:'Update or close-out note',head:'Notes',type:'area',w:'1.4fr'}],{wide:1,flag:isLate,hideRow:oldDone}),'')+'</div>'
-    +'<div class="g">'+box('From records and your tables',(rows?'<div class="scroll"><div class="wide"><div class="tr th" style="--cols:'+C+'"><div></div><div>★</div><div>Action</div><div>Who</div><div>Due</div><div>Source</div><div>Notes</div></div>'+rows+'</div></div>':'<p class="empty">'+(ui.showDone?'Nothing yet.':'Nothing open.')+' Actions written in records collect here, and so do rows from any table you mark in the layout editor.</p>'),
-      'Changes here update the source record','<button class="mini" data-act="toggledone">'+(ui.showDone?'Hide done':'Show done')+'</button>')+'</div>'
+    +'<div class="g">'+box('From documents and your tables',(rows?'<div class="scroll"><div class="wide"><div class="tr th" style="--cols:'+C+'"><div></div><div>★</div><div>Action</div><div>Who</div><div>Due</div><div>Source</div><div>Notes</div></div>'+rows+'</div></div>':'<p class="empty">'+(ui.showDone?'Nothing yet.':'Nothing open.')+' Actions written in documents collect here, and so do rows from any table you mark in the layout editor.</p>'),
+      'Changes here update the source document','<button class="mini" data-act="toggledone">'+(ui.showDone?'Hide done':'Show done')+'</button>')+'</div>'
     +othersBox();
 };
 function othersBox(){var nm=myNames();
-  if(!nm.length){var any=everyActions().some(function(a){return !a.own&&!a.done&&a.who});return any?'<p class="meta nop" style="margin:4px 0 12px">Actions in meeting notes and other records count as yours. To keep other people\u2019s actions out of your lists, add your names or initials under <button class="link" data-go="settings">Settings, You</button>.</p>':''}
+  if(!nm.length){var any=everyActions().some(function(a){return !a.own&&!a.done&&a.who});return any?'<p class="meta nop" style="margin:4px 0 12px">Actions in meeting notes and other documents count as yours. To keep other people\u2019s actions out of your lists, add your names or initials under <button class="link" data-go="settings">Settings, You</button>.</p>':''}
   var oa=othersActions().filter(function(a){return ui.showDone||!a.done}).sort(byDue),C='34px 2fr .7fr 110px 1.3fr 110px';if(!oa.length)return '';
   var fk='othersacts',rows=oa.map(function(a){var late=isLate(a);return '<div class="tr" style="--cols:'+C+'">'+(a.bind?'<span class="ck"><input type="checkbox" data-l="'+a.bind+'" data-k="'+a.bind+'" data-rr="1"'+(a.done?' checked':'')+' aria-label="Done: '+esc(a.t)+'"></span>':'<span></span>')
     +'<div class="ro">'+esc(a.t)+'</div><div class="ro">'+esc(a.who||'No one named')+'</div><div class="ro'+(late?' late-t':'')+'">'+fmtD(a.due)+(late?' overdue':'')+'</div><div class="ro"><button class="link"'+goAttr(a.go)+'>'+esc(a.src)+'</button></div>'
     +'<div class="ro">'+(a.rowKey?'<button class="mini" data-act="mine" data-key="'+a.rowKey+'" data-v="1" title="Show it with your actions and on the dashboard">Track as mine</button>':'')+'</div></div>'}).join('');
   return '<div class="g">'+box('Other people\u2019s actions ('+oa.length+')','<div class="scroll"><div class="wide"><div class="tr th" style="--cols:'+C+'"><div></div><div>Action</div><div>Who</div><div>Due</div><div>Source</div><div></div></div>'+rows+'</div></div>',
-    'From your records. They stay out of your counts, dashboard and week.','',null,'actions:others')+'</div>'}
-/* the Actions page grouped like Records: every action, own and from records, filed by one key */
+    'From your documents. They stay out of your counts, dashboard and week.','',null,'actions:others')+'</div>'}
+/* the Actions page grouped like Documents: every action, own and from documents, filed by one key */
 function actGroups(g){var t=today(),all=allActions().filter(function(a){return ui.showDone||!a.done}).sort(byDue);
-  if(!all.length)return '<p class="empty">'+(ui.showDone?'No actions yet.':'No open actions.')+' Add actions in the List view, or in any record.</p>';
+  if(!all.length)return '<p class="empty">'+(ui.showDone?'No actions yet.':'No open actions.')+' Add actions in the List view, or in any document.</p>';
   var wd=new Date(t+'T00:00:00').getDay(),endW=addDays(t,(7-wd)%7),endN=addDays(endW,7);
   var keyOf={project:function(a){return store.projects[a.project]?a.project:''},
     person:function(a){return String(a.who||'').trim()},
     kind:function(a){return a.own?(a.kind||'act'):'rec'},
     due:function(a){return a.done?'6':a.kind==='wait'?'7':!a.due?'5':a.due<t?'0':a.due===t?'1':a.due<=endW?'2':a.due<=endN?'3':'4'}}[g];
   var groups={};all.forEach(function(a){var k=keyOf(a);(groups[k]=groups[k]||[]).push(a)});
-  var KN={act:'Actions',wait:'Waiting on others',follow:'Follow-ups',rem:'Reminders',change:'Requests',rec:'From records and tables'},DN=['Overdue','Today','Later this week','Next week','Later','No due date','Done','Waiting on others'];
+  var KN={act:'Actions',wait:'Waiting on others',follow:'Follow-ups',rem:'Reminders',change:'Requests',rec:'From documents and tables'},DN=['Overdue','Today','Later this week','Next week','Later','No due date','Done','Waiting on others'];
   var label=function(k){if(g==='project')return k?(store.projects[k].name||'Untitled project')+(store.projects[k].archived?' (archived)':''):'No project';if(g==='person')return k||'Not assigned';if(g==='kind')return KN[k]||k;return DN[+k]};
   var boxOf=function(k){var set=groups[k],late=set.filter(isLate).length;
     return '<div class="g">'+box(label(k),'<ul class="list due">'+set.map(function(x){return actLi(x,{pre:'ag',src:1,proj:g!=='project'})}).join('')+'</ul>',set.length+(set.length===1?' action':' actions')+(late&&g!=='due'?', '+late+' overdue':''))+'</div>'};
@@ -2189,12 +2195,12 @@ function actGroups(g){var t=today(),all=allActions().filter(function(a){return u
   return keys.map(boxOf).join('')}
 V.records=function(){
   var G=[['project','By project'],['person','By person'],['form','By type'],['date','By date']],g=ui.rgroup||'project';if(g==='folder')g='project';
-  var h='<div class="head"><h1>Records</h1><div class="tabs">'+G.map(function(x){return '<button data-act="rgroup" data-g="'+x[0]+'" aria-pressed="'+(g===x[0])+'">'+x[1]+'</button>'}).join('')+'</div><span class="sp"></span>'+newRecordCtl('','')+'<button class="mini" data-go="rtypes">Record templates</button></div>';
+  var h='<div class="head"><h1>Documents</h1><div class="tabs">'+G.map(function(x){return '<button data-act="rgroup" data-g="'+x[0]+'" aria-pressed="'+(g===x[0])+'">'+x[1]+'</button>'}).join('')+'</div><span class="sp"></span>'+newRecordCtl('','')+'<button class="mini" data-go="rtypes">Document templates</button></div>';
   var ids=Object.keys(store.records);
-  if(!ids.length||g==='date')return h+box('All records',recordList(function(){return true},'No records yet. Choose a type above to create meeting notes, a check-in, a design review record and more.'));
+  if(!ids.length||g==='date')return h+box('All documents',recordList(function(){return true},'No documents yet. Choose a type above to create meeting notes, a check-in, a design review document and more.'));
   var grp=function(list,keyOf,none){var groups={},order=[];ids.forEach(function(id){var k=keyOf(store.records[id]);if(!groups[k]){groups[k]=[];order.push(k)}groups[k].push(id)});
     return {groups:groups,keys:list?list.filter(function(k){return groups[k]}):order.sort(function(a,b){return a===''?1:b===''?-1:a.localeCompare(b)})}};
-  var boxes=function(r,label){return r.keys.map(function(k){var set=r.groups[k];return '<div class="g">'+box(label(k),recordList(function(x){return set.indexOf(x.id)>=0},''),set.length+(set.length===1?' record':' records'))+'</div>'}).join('')};
+  var boxes=function(r,label){return r.keys.map(function(k){var set=r.groups[k];return '<div class="g">'+box(label(k),recordList(function(x){return set.indexOf(x.id)>=0},''),set.length+(set.length===1?' document':' documents'))+'</div>'}).join('')};
   if(g==='project'){var sp=projSplit(),valid=function(r){return store.projects[r.project]?r.project:''},pn=function(k){return k?(store.projects[k].name||'Untitled project')+(store.projects[k].archived?' (archived)':''):'No project'};
     var arch=sorted('projects',true),ext=grp(sp.ext.map(function(x){return x.id}).concat(arch.filter(function(x){return !isInt(x.d)}).map(function(x){return x.id})),valid),
       int=grp(sp.int.map(function(x){return x.id}).concat(arch.filter(function(x){return isInt(x.d)}).map(function(x){return x.id})),valid),none=grp([''],valid);
@@ -2205,7 +2211,7 @@ V.records=function(){
 V.record=function(){
   var id=ui.id,r=store.records[id];if(!r){ui.v='records';return V.records()}
   var F=formDef(r.type);if(ui.edit&&F.lid)return '<div class="head"><h1>'+esc(F.name)+'</h1></div>'+editor(F.lid);
-  return '<div class="head"><h1>'+esc(F.name)+'</h1><span class="sp"></span>'+updated(r)+pdfBtn+(F.lid?editBtn(F.lid):'')+'<button class="btn danger" data-act="del" data-kind="records">'+(ui.confirm==='del'?'Confirm delete':'Delete')+'</button></div>'+recBody(id)};
+  return '<div class="head"><h1>'+esc(F.name)+'</h1><span class="sp"></span>'+updated(r)+(popOK()?'<button class="btn" data-act="topop" title="Put it back in a panel over the page, alongside your other open documents">Back to panel</button>':'')+pdfBtn+(F.lid?editBtn(F.lid):'')+'<button class="btn danger" data-act="del" data-kind="records">'+(ui.confirm==='del'?'Confirm delete':'Delete')+'</button></div>'+recBody(id)};
 var recCtx=null;
 function recBody(id){var r=store.records[id],F=formDef(r.type),out;recCtx=id;
   try{out=hfields('records',id,(function(){var c=rtConf(r.type),H=[];if(c.num||r.no)H.push(['no','No.',.55]);H.push(['title',F.title,1.6],['date','Date',.8,'date'],['project','Project',1,'select',projOpts],['person','Person',1,'select',peopleOpts]);
@@ -2220,18 +2226,18 @@ V.archive=function(){
   var sn=Object.keys(store.snaps).map(function(id){return {id:id,d:store.snaps[id]}}).sort(function(a,b){return (b.d.ts||0)-(a.d.ts||0)});
   return '<div class="head"><h1>Archive</h1></div><div class="g" style="grid-template-columns:repeat(2,minmax(0,1fr))">'+lst('projects','Archived projects')+lst('people','Archived people')+'</div>'
     +'<div class="g">'+box('Dashboard snapshots',sn.length?'<ul class="list">'+sn.map(function(x){return '<li><span class="d">'+fmtL(x.d.date)+'</span><span>Dashboard</span><span class="sp"></span><button class="mini" data-act="snappdf" data-id="'+x.id+'">PDF</button><button class="mini" data-act="snapword" data-id="'+x.id+'">Word</button><button class="mini" data-act="delsnap" data-id="'+x.id+'">Delete</button></li>'}).join('')+'</ul>':'<p class="empty">No snapshots yet. "Save a snapshot" on the dashboard freezes it as it stands.</p>','A frozen copy of the dashboard on the day it was saved')+'</div>'};
-V.rtypes=function(){var head='<div class="head"><h1>Record templates</h1><span class="sp"></span><button class="mini" data-go="records">Records</button></div>';
+V.rtypes=function(){var head='<div class="head"><h1>Document templates</h1><span class="sp"></span><button class="mini" data-go="records">Documents</button></div>';
   if(ui.edit)return head+editor(ui.edit);
   var cnt={};Object.keys(store.records).forEach(function(id){var t=store.records[id].type;cnt[t]=(cnt[t]||0)+1});
-  var nrec=function(n){return n?n+(n===1?' record':' records'):'No records yet'};
+  var nrec=function(n){return n?n+(n===1?' document':' documents'):'No documents yet'};
   var optRow=function(type){if(ui.rtOpen!==type)return '';var c=rtConf(type),P='single|settings|rt.'+type+'.';
-      return '<li class="rtopt"><label class="ptck"><input type="checkbox" data-b="'+P+'num" data-k="'+P+'num" data-rr="1"'+(c.num?' checked':'')+'> Number these records</label>'
+      return '<li class="rtopt"><label class="ptck"><input type="checkbox" data-b="'+P+'num" data-k="'+P+'num" data-rr="1"'+(c.num?' checked':'')+'> Number these documents</label>'
         +'<label class="ptck">Prefix <input class="ein" style="width:70px" data-b="'+P+'prefix" data-k="'+P+'prefix" data-rr="1" value="'+esc(c.prefix)+'"></label>'
         +'<label class="ptck"><input type="checkbox" data-b="'+P+'status" data-k="'+P+'status" data-rr="1"'+(c.status?' checked':'')+'> Draft / Final status</label>'
         +'<label class="ptck"><input type="checkbox" data-b="'+P+'ink" data-k="'+P+'ink" data-rr="1"'+(c.ink?' checked':'')+'> Open with handwriting on the iPad</label>'
         +'<label class="ptck" style="flex:1 1 260px">Default title <input class="ein" style="flex:1" data-b="'+P+'title" data-k="'+P+'title" value="'+esc(c.title||'')+'" placeholder="e.g. {project} weekly, {date}"></label></li>'};
   var optBtn=function(type){return '<button class="mini" data-act="rtopt" data-t="'+type+'" aria-expanded="'+(ui.rtOpen===type)+'">Options</button>'};
-  var onBox=function(key,on){return '<label class="ptck" title="Offer it in the New record menus"><input type="checkbox" data-rton="'+key+'"'+(on?' checked':'')+'> In menus</label>'};
+  var onBox=function(key,on){return '<label class="ptck" title="Offer it in the New document menus"><input type="checkbox" data-rton="'+key+'"'+(on?' checked':'')+'> In menus</label>'};
   var all=pages(),gsel=function(i,v){return '<select class="newrec" data-b="single|layouts|pages.'+i+'.grp" data-k="rtg|'+i+'" data-rr="1" aria-label="Group">'+opts(RGROUPS.map(function(g){return [g[0],g[1]]}).concat([['','Your types']]),v||'')+'</select>'};
   var order=[].concat.apply([],RGROUPS.map(function(g){return g[2]})).concat(Object.keys(FORMS).filter(function(k){return k!=='checklist'&&!RGROUPS.some(function(g){return g[2].indexOf(k)>=0})})).concat(['checklist']);
   var gh=function(k){var g=RGROUPS.filter(function(x){return x[2][0]===k})[0];return g?'<li class="rtgh">'+esc(g[1])+'</li>':k==='checklist'?'<li class="rtgh">'+esc(recName('checklist'))+'s</li>':''};
@@ -2242,26 +2248,26 @@ V.rtypes=function(){var head='<div class="head"><h1>Record templates</h1><span c
         +onBox('c|'+i,!p.off)+optBtn('c_'+p.id)+'<button class="mini" data-act="edit" data-lid="c_'+p.id+'">Edit layout</button><button class="mini" data-act="rmpage" data-i="'+i+'">'+(ui.confirm==='pg'+i?'Confirm remove':'Remove')+'</button></li>'+optRow('c_'+p.id)}).join('');
   var tp=templates();
   var fmt=rtSet().numFmt||'{type}-{project}-{n}';
-  return head+'<div class="rtfmt nop"><b>Record numbers</b> <input class="ein" data-b="single|settings|numFmt" data-k="numfmt" data-rr="1" value="'+esc(fmt)+'" style="width:220px" aria-label="Number format"><span class="meta">{type} is the prefix, {project} the project code (set it in each project\u2019s Code field, or it is made from the name), {n} the running number, {year} the year. Example: '+esc(recNumber('meeting','').no.replace(/^/,''))+'</span></div>'
-    +'<label class="ptck nop" style="margin:0 0 10px"><input type="checkbox" data-b="single|settings|popOff" data-k="popoff" data-rr="1"'+(single('settings').popOff?' checked':'')+'> On a computer, open records full page instead of in a panel over the page</label>'
-    +'<p class="meta" style="margin:-4px 0 10px">Every type of record you can create. Rename them, change their layout, take them out of the New record menus, or add your own. Records already made keep their content.</p>'
-    +'<div class="g">'+box('Record types','<ul class="list rtl">'+forms+'</ul>'
-      +'<div class="head" style="padding:8px 9px 10px;margin:0;border-top:1px solid var(--rule)"><input class="ein" data-ui="rtname" data-k="ui|rtname" value="'+esc(ui.rtname||'')+'" placeholder="Name of a new record type, e.g. Site diary" aria-label="Name of a new record type" style="flex:1 1 220px"><button class="btn pri" data-act="addrtype">Create and lay it out</button></div>',
+  return head+'<div class="rtfmt nop"><b>Document numbers</b> <input class="ein" data-b="single|settings|numFmt" data-k="numfmt" data-rr="1" value="'+esc(fmt)+'" style="width:220px" aria-label="Number format"><span class="meta">{type} is the prefix, {project} the project code (set it in each project\u2019s Code field, or it is made from the name), {n} the running number, {year} the year. Example: '+esc(recNumber('meeting','').no.replace(/^/,''))+'</span></div>'
+    +'<label class="ptck nop" style="margin:0 0 10px"><input type="checkbox" data-b="single|settings|popOff" data-k="popoff" data-rr="1"'+(single('settings').popOff?' checked':'')+'> On a computer, open documents full page instead of in a panel over the page</label>'
+    +'<p class="meta" style="margin:-4px 0 10px">Every type of document you can create. Rename them, change their layout, take them out of the New document menus, or add your own. Documents already made keep their content.</p>'
+    +'<div class="g">'+box('Document types','<ul class="list rtl">'+forms+'</ul>'
+      +'<div class="head" style="padding:8px 9px 10px;margin:0;border-top:1px solid var(--rule)"><input class="ein" data-ui="rtname" data-k="ui|rtname" value="'+esc(ui.rtname||'')+'" placeholder="Name of a new document type, e.g. Site diary" aria-label="Name of a new document type" style="flex:1 1 220px"><button class="btn pri" data-act="addrtype">Create and lay it out</button></div>',
       'Clear a built-in name to go back to the original')+'</div>'
-    +'<div class="head" style="margin-top:18px"><h2 style="font-size:1.3rem">Checklists</h2><span class="meta">Each one appears as \u201C'+esc(recName('checklist'))+': name\u201D when you create a record. Editing a list does not change checklists already started.</span></div>'
+    +'<div class="head" style="margin-top:18px"><h2 style="font-size:1.3rem">Checklists</h2><span class="meta">Each one appears as \u201C'+esc(recName('checklist'))+': name\u201D when you create a document. Editing a list does not change checklists already started.</span></div>'
     +tp.map(function(t,i){var nk='single|settings|checklists.'+i+'.name';
       return '<div class="g"><section class="box"><div class="bt"><input data-b="'+nk+'" data-k="'+nk+'" data-rr="1" value="'+esc(t.name)+'" placeholder="Checklist name" aria-label="Checklist name" style="border:0;background:transparent;font-weight:600;font-size:.9rem;min-width:0;flex:0 1 260px">'
         +'<span class="r">'+onBox('t|'+i,!t.off)+'<button class="mini" data-act="rmtpl" data-i="'+i+'">'+(ui.confirm==='tpl'+i?'Confirm remove':'Remove')+'</button></span></div>'
         +table('single','settings','checklists.'+i+'.items',[{k:'t',label:'Check'}],{nohead:1})+'</section></div>'}).join('')
     +'<div class="head"><button class="btn" data-act="addtpl">Add a checklist</button></div>'};
 V.settings=function(){
-  var pg=pages(),SC=[['page','A page in the side menu'],['project','A tab on every project'],['person','A tab on every person'],['form','A type of record']];
+  var pg=pages(),SC=[['page','A page in the side menu'],['project','A tab on every project'],['person','A tab on every person'],['form','A type of document']];
   if(ui.edit)return '<div class="head"><h1>Settings</h1></div>'+editor(ui.edit);
   var stS=single('settings');
   return '<div class="head"><h1>Settings</h1></div>'
     +'<div class="g">'+box('You','<div class="youbox"><label>Your names and initials <input class="ein" data-b="single|settings|me" data-k="setme" data-rr="1" value="'+esc(stS.me||'')+'" placeholder="e.g. Will, WS, Will Smith" aria-label="Your names and initials"></label>'
       +'<label class="ptck"><input type="checkbox" data-b="single|settings|blankOthers" data-k="setblank" data-rr="1"'+(stS.blankOthers?' checked':'')+'> Treat actions with no Who as someone else\u2019s</label>'
-      +'<p class="meta">Actions in records whose Who is not one of these go to Other people\u2019s actions, out of your counts, dashboard and week. Your own action list is always yours. Leave it empty to count everything as yours.</p></div>','Used only to sort actions. Separate names with commas.')+'</div>'
+      +'<p class="meta">Actions in documents whose Who is not one of these go to Other people\u2019s actions, out of your counts, dashboard and week. Your own action list is always yours. Leave it empty to count everything as yours.</p></div>','Used only to sort actions. Separate names with commas.')+'</div>'
     +'<div class="g">'+box('Your own pages and tabs',(pg.some(function(p){return p.scope!=='form'})?'<ul class="list">'+pg.map(function(p,i){if(p.scope==='form')return '';var nk='single|layouts|pages.'+i+'.name';
         return '<li><input class="ein" data-b="'+nk+'" data-k="'+nk+'" data-rr="1" value="'+esc(p.name)+'" placeholder="Name" aria-label="Name" style="flex:0 1 240px"><span class="k">'+esc(SC.filter(function(x){return x[0]===p.scope})[0][1])+'</span><span class="sp"></span>'
           +'<button class="mini" data-act="edit" data-lid="c_'+p.id+'">Edit layout</button><button class="mini" data-act="rmpage" data-i="'+i+'">'+(ui.confirm==='pg'+i?'Confirm remove':'Remove')+'</button></li>'}).join('')+'</ul>':'<p class="empty">Nothing added yet. Create a page or a tab, then build its layout from sections.</p>')
@@ -2273,11 +2279,11 @@ V.settings=function(){
         ['Photos and files',capS.assets==='yes'?'Working':capS.assets==='checking'?'Checking':'Not available here'],['Downloads and PDF export',capS.downloads==='yes'?'Working':capS.downloads==='checking'?'Checking':'Not available here'],
         ['Pencil input',IOS_STYLUS?'iPad pencil mode':(window.PointerEvent?'Standard pen and mouse mode':'Basic')],['Screen',window.innerWidth+' by '+window.innerHeight+(window.matchMedia&&matchMedia('(pointer:coarse)').matches?', touch':', mouse')]]
         .map(function(r){return '<div class="tr"><div class="lab">'+r[0]+'</div><div class="ro">'+r[1]+'</div></div>'}).join('')+'</div>','What this page can reach on this device')+'</div>'
-    +'<div class="g">'+box('Built-in layouts','<p class="empty">To change a built-in page, open it and choose Edit layout: the project sheet and wiki from any project, the person sheet from any person, a record form from any record of that type.</p>')+'</div>'
-    +'<div class="g">'+box('Backup','<p class="empty">'+bkLine()+'</p><p class="empty">Back up as Word writes one Word document per project, person, record and workspace page into a folder you choose, replacing the previous copies. Make a folder of its own for it, such as OneDrive\\Workspace backup: the browser will not write straight into Downloads, Documents or Desktop. It includes the restore file. Download backup saves just the restore file. Restoring replaces what is here with the file\'s contents.</p><div class="head" style="padding:0 9px 10px;margin:0"><button class="btn pri" data-act="wordbk">Back up as Word</button>'+(window.showDirectoryPicker?'<button class="btn" data-act="wordbkdir">Choose a different folder</button>':'')+'<button class="btn" data-act="backup">Download backup</button>'
+    +'<div class="g">'+box('Built-in layouts','<p class="empty">To change a built-in page, open it and choose Edit layout: the project sheet and wiki from any project, the person sheet from any person, a document form from any document of that type.</p>')+'</div>'
+    +'<div class="g">'+box('Backup','<p class="empty">'+bkLine()+'</p><p class="empty">Back up as Word writes one Word document per project, person, document and workspace page into a folder you choose, replacing the previous copies. Make a folder of its own for it, such as OneDrive\\Workspace backup: the browser will not write straight into Downloads, Documents or Desktop. It includes the restore file. Download backup saves just the restore file. Restoring replaces what is here with the file\'s contents.</p><div class="head" style="padding:0 9px 10px;margin:0"><button class="btn pri" data-act="wordbk">Back up as Word</button>'+(window.showDirectoryPicker?'<button class="btn" data-act="wordbkdir">Choose a different folder</button>':'')+'<button class="btn" data-act="backup">Download backup</button>'
       +'<label class="btn" style="cursor:pointer">'+(ui.confirm==='restore'?'Choose the file to restore from':'Restore from backup')+'<input class="file" type="file" accept=".json,application/json" data-restore="1"></label></div>')+'</div>'
     +ptypesBox()
-    +'<p class="meta" style="margin:14px 0 0">Record types and checklists are on their own page: <button class="link" data-go="rtypes">Record templates</button>.</p>'
+    +'<p class="meta" style="margin:14px 0 0">Document types and checklists are on their own page: <button class="link" data-go="rtypes">Document templates</button>.</p>'
 };
 
 /* ================= PDF export ================= */
@@ -2312,7 +2318,7 @@ function currentModel(){var v=ui.v,d,nm;
     if(ui.tab==='wiki')return {title:nm,kicker:'Project wiki',meta:meta,rows:mRows(d,'wiki.',getLayout('wiki').rows)};
     if(ui.tab.indexOf('c_')===0)return {title:nm,kicker:layoutInfo(ui.tab)[0],meta:meta,rows:mRows(d,'x.'+ui.tab.slice(2)+'.',getLayout(ui.tab).rows)};
     if(ui.tab==='checks')ui.tab='records';
-    if(ui.tab==='records')return {title:nm,kicker:'Records',meta:meta,rows:[{cols:[[recordsModel(function(x){return x.project===ui.id})]]}]};
+    if(ui.tab==='records')return {title:nm,kicker:'Documents',meta:meta,rows:[{cols:[[recordsModel(function(x){return x.project===ui.id})]]}]};
     return {title:nm,kicker:'Project sheet',meta:meta,rows:mRows(d,'',getLayout(sheetLid(d)).rows).concat(mRows(d,'',(d.own||{}).rows))}}
   if(v==='person'){d=store.people[ui.id];if(ui.tab.indexOf('c_')===0)return {title:d.name||'Unnamed',kicker:layoutInfo(ui.tab)[0],meta:[['Role',d.role]],rows:mRows(d,'x.'+ui.tab.slice(2)+'.',getLayout(ui.tab).rows)};
     return {title:d.name||'Unnamed',kicker:'Person sheet',meta:[['Role',d.role],['Started',fmtL(d.started)]],rows:mRows(d,'',getLayout('person').rows).concat(mRows(d,'',(d.own||{}).rows)).concat([{cols:[[recordsModel(function(x){return x.person===ui.id})]]}])}}
@@ -2334,7 +2340,7 @@ function currentModel(){var v=ui.v,d,nm;
     return {fname:d.no?fileName(d.no+(d.title?' - '+d.title:'')):'',title:d.title||F.name,kicker:F.name,sub:st,draft:dr,runhead:[d.title||F.name,d.no,dr?'DRAFT':''].filter(Boolean).join('  \u00B7  '),meta:meta,rows:(cr?[{w:[1],cols:[[{t:'Open from the last meeting'+(cr.m.no?' ('+cr.m.no+')':''),kind:'table',min:1,cols:[{label:'Action',w:2},{label:'Who',w:.7},{label:'Due',w:.8}],rows:cr.rows.map(function(x){return [x.a.t,x.a.who||'',fmtL(x.a.due)]})}]]}]:[]).concat(mRows(d,'d.',rest))}}
   return null}
 function recordsModel(filter){var recs=Object.keys(store.records).map(function(id){return store.records[id]}).filter(filter).sort(function(a,b){return (a.date||'')<(b.date||'')?1:-1});
-  return {t:'Records',kind:'table',cols:[{label:'Date',w:.6},{label:'Form',w:.9},{label:'Title',w:1.2},{label:'Summary',w:2}],rows:recs.map(function(r){return [fmtL(r.date),formDef(r.type).name,r.title||'',recSummary(r)]})}}
+  return {t:'Documents',kind:'table',cols:[{label:'Date',w:.6},{label:'Form',w:.9},{label:'Title',w:1.2},{label:'Summary',w:2}],rows:recs.map(function(r){return [fmtL(r.date),formDef(r.type).name,r.title||'',recSummary(r)]})}}
 function cellTxt(n){var out='';(function w(x){[].forEach.call(x.childNodes,function(c){if(c.nodeType===3)out+=c.nodeValue.replace(/\u00a0/g,' ');else if(c.tagName==='BR')out+='\n';else{if((c.tagName==='DIV'||c.tagName==='P'||c.tagName==='LI')&&out&&!/\n$/.test(out))out+='\n';w(c)}})})(n);return out.replace(/\n+$/,'').trim()}
 function richBlocks(html){var t=document.createElement('template');t.innerHTML=cleanHtml(html);var blocks=[],cur=null;
   function nb(bullet,num,head){cur={bullet:bullet,num:num||0,head:!!head,runs:[]};blocks.push(cur)}
@@ -2486,7 +2492,7 @@ function exportWord(model,name){if(!model)return;toast('Preparing the Word docum
   loadDocx().then(function(){return loadPics(model)}).then(function(){return window.docx.Packer.toBlob(makeDocx(model))}).then(function(bl){return bl.arrayBuffer()})
   .then(function(buf){download(name||(model.fname?model.fname+'.docx':slug((model.kicker&&model.kicker!==model.title?model.kicker+'_':'')+model.title)+'_'+today()+'.docx'),buf)},
     function(e){toast(window.docx?'That page could not be turned into a Word document.':'The Word library did not load. Check your connection and reload.')})}
-/* ---- Back up as Word: one document per project, person, record and workspace page, written flat into a folder you choose ---- */
+/* ---- Back up as Word: one document per project, person, document and workspace page, written flat into a folder you choose ---- */
 function bkLine(){var lb=single('settings').lastBackup;if(!lb||!lb.at)return 'Not backed up as Word yet.';var d=new Date(lb.at),days=Math.floor((Date.now()-d.getTime())/864e5);
   return 'Last backed up '+(days<1?'today':days===1?'yesterday':days+' days ago')+', '+d.toLocaleDateString(undefined,{day:'numeric',month:'short',year:'numeric'})+': '+lb.files+' files to '+esc(lb.folder||'a folder')+'.'}
 function backupJson(){var out={app:'lead-workspace',version:2,exported:new Date().toISOString()};KINDS.forEach(function(k){out[k]=store[k]});return JSON.stringify(out,null,1)}
@@ -2498,13 +2504,13 @@ function fileName(s){s=String(s||'').replace(/[\\\/:*?"<>|\u0000-\u001f]+/g,' ')
 function backupDocs(){var out=[],used={},add=function(name,model){if(!model)return;var n=fileName(name),k=n.toLowerCase(),i=2;while(used[k+'.docx']){n=fileName(name)+' ('+(i++)+')';k=n.toLowerCase()}used[k+'.docx']=1;out.push({name:n+'.docx',model:model})};
   Object.keys(store.projects).map(function(id){return {id:id,d:store.projects[id]}}).sort(function(a,b){return String(a.d.name||'').localeCompare(String(b.d.name||''))}).forEach(function(x){
     var parts=[['project',x.id,'sheet','Project sheet'],['project',x.id,'wiki','Project wiki']].concat(pages('project').map(function(pg){return ['project',x.id,'c_'+pg.id,pg.name||'Tab']}));
-    if(Object.keys(store.records).some(function(r){return store.records[r].project===x.id}))parts.push(['project',x.id,'records','Records']);
+    if(Object.keys(store.records).some(function(r){return store.records[r].project===x.id}))parts.push(['project',x.id,'records','Documents']);
     add('Project - '+(x.d.name||'Untitled project')+(x.d.archived?' (archived)':''),combine(parts))});
   Object.keys(store.people).map(function(id){return {id:id,d:store.people[id]}}).sort(function(a,b){return String(a.d.name||'').localeCompare(String(b.d.name||''))}).forEach(function(x){
     var parts=[['person',x.id,'sheet','Person sheet']].concat(pages('person').map(function(pg){return ['person',x.id,'c_'+pg.id,pg.name||'Tab']}));
     add('Person - '+(x.d.name||'Unnamed')+(x.d.archived?' (archived)':''),combine(parts))});
   Object.keys(store.records).map(function(id){return {id:id,d:store.records[id]}}).sort(function(a,b){return String(a.d.date||'').localeCompare(String(b.d.date||''))}).forEach(function(x){var r=x.d,pr=store.projects[r.project];
-    add('Record - '+(r.no?r.no+' - ':'')+(r.date||'undated')+' - '+formDef(r.type).name+(r.title?' - '+r.title:'')+(pr&&pr.name&&String(r.title||'').indexOf(pr.name)<0?' - '+pr.name:''),modelFor('record',x.id))});
+    add('Document - '+(r.no?r.no+' - ':'')+(r.date||'undated')+' - '+formDef(r.type).name+(r.title?' - '+r.title:'')+(pr&&pr.name&&String(r.title||'').indexOf(pr.name)<0?' - '+pr.name:''),modelFor('record',x.id))});
   [['dash','Dashboard'],['actions','Actions'],['gsched','Schedule'],['sched','Resourcing'],['bd','Business development'],['team','Team']].forEach(function(w){add('Workspace - '+w[1],modelFor(w[0],null))});
   pages('page').forEach(function(pg){add('Workspace - '+(pg.name||'Page'),modelFor('page',pg.id))});
   return out}
@@ -2670,7 +2676,7 @@ function inkBegin(cv,cx,cy,pr,erase,src,id){var key=cv.dataset.ink,d=inkData(key
     else{mode='lasso';inkSel=null}}
   else if(inkSel){inkSel=null;drawInk(cv);inkBars()}
   if(d._pending){toast('This handwriting is still loading. Try again in a moment.');return}
-  if(mode==='draw'&&d.s.length>400&&d.s.join('').length>INK_MAX){toast('This handwriting area is full. Start a new record to keep writing.');return}
+  if(mode==='draw'&&d.s.length>400&&d.s.join('').length>INK_MAX){toast('This handwriting area is full. Start a new document to keep writing.');return}
   inkCur={cv:cv,key:key,d:d,mode:mode,erase:mode==='erase',src:src,id:id,pts:[],before:d.s.slice(),tool:inkUI.tool==='hl'?'h':'p',color:inkUI.color,width:inkUI.width,changed:false,start:q,bb:bb,lastT:Date.now(),
     orig:mode==='move'||mode==='scale'?inkSel.idx.map(function(i){return {i:i,st:decode(d.s[i])}}):null};
   var hadSel=!!bb||mode!=='draw'&&mode!=='erase';inkMove(cx,cy,pr);if(hadSel)inkBars()}
@@ -2771,19 +2777,19 @@ function render(focusKey){
   var R=function(v,l,n,on){return '<button data-go="'+v+'"'+(on||cur(v))+'>'+l+(n?'<span class="n">'+n+'</span>':'')+'</button>'};
   rail.innerHTML='<div class="brand">'+LOGO+'Workspace<span class="sp"></span><button class="undob" data-act="undolast" aria-label="Undo">\u21B6 Undo</button></div><input type="search" data-search="1" data-k="search" placeholder="Search" aria-label="Search the workspace" value="'+esc(ui.q)+'">'
     +'<select class="newsel" data-new="1" data-k="newsel" aria-label="Create something new"><option value="">New\u2026</option><option value="action">Action</option><option value="project">Project</option><option value="person">Person</option>'+formGroups().map(function(g){return '<optgroup label="'+esc(g.group)+'">'+g.items.map(function(o){return '<option value="r:'+esc(o[0])+'">'+esc(o[1])+'</option>'}).join('')+'</optgroup>'}).join('')+'</select>'
-    +R('dash','Dashboard')+R('inbox','Inbox',nIn)+R('actions','Actions',openA)+R('week','Week',0,ui.v==='week'||ui.v==='today'?' aria-current="page"':'')+R('gsched','Schedule')+R('sched','Resourcing')+R('records','Records',nRec,ui.v==='records'||ui.v==='record'?' aria-current="page"':'')+R('bd','Business development')+R('team','Team',0,/^(team|office|people)$/.test(ui.v)?' aria-current="page"':'')
+    +R('dash','Dashboard')+R('inbox','Inbox',nIn)+R('actions','Actions',openA)+R('week','Week',0,ui.v==='week'||ui.v==='today'?' aria-current="page"':'')+R('gsched','Schedule')+R('sched','Resourcing')+R('records','Documents',nRec,ui.v==='records'||ui.v==='record'?' aria-current="page"':'')+R('bd','Business development')+R('team','Team',0,/^(team|office|people)$/.test(ui.v)?' aria-current="page"':'')
     +'<div class="sec"><button class="secb" data-go="projects">Projects</button></div>'+(function(){var sp=projSplit(),pb=function(x){return '<button data-go="project" data-id="'+x.id+'"'+cur('project',x.id)+'>'+mark(x.d.status)+'<span style="overflow:hidden;text-overflow:ellipsis">'+esc(x.d.name||'Untitled project')+'</span></button>'};
       return sp.ext.map(pb).join('')+(sp.int.length?'<div class="subsec">Internal</div>'+sp.int.map(pb).join(''):'')})()+'<button class="new" data-act="new" data-kind="projects">+ New project</button>'
     +'<div class="sec"><button class="secb" data-go="team">People</button></div>'+sorted('people').map(function(x){return '<button data-go="person" data-id="'+x.id+'"'+cur('person',x.id)+'>'+esc(x.d.name||'Unnamed')+'</button>'}).join('')+'<button class="new" data-act="new" data-kind="people">+ New person</button>'
     +(pages('page').length?'<div class="sec">Your pages</div>'+pages('page').map(function(p){return '<button data-go="page" data-id="'+p.id+'"'+cur('page',p.id)+'>'+esc(p.name||'Untitled page')+'</button>'}).join(''):'')
     +'<button class="railmore" data-act="railmore" aria-expanded="'+!!moreOpen+'" style="margin-top:10px">More</button>'
-    +(moreOpen?R('reset','Monday planning')+R('dump','Friday review')+R('rtypes','Record templates')+R('archive','Archive'):'')
+    +(moreOpen?R('reset','Monday planning')+R('dump','Friday review')+R('rtypes','Document templates')+R('archive','Archive'):'')
     +R('settings','Settings')+'<div id="status"></div>';
   status();tabbar();undoUI();
   if(!V[ui.v])ui.v='dash';
   view.innerHTML=mode==='loading'?'<p class="empty">Loading your workspace.</p>':backBar()+V[ui.v]();
   var hd=view.querySelector('.head');
-  if(hd){var hb=[].filter.call(hd.children,function(c){return c.matches('button.btn,label.btn')}),main=function(b){var t=b.dataset.act;return t==='pdf'||t==='snap'||t==='newmeeting'||(t==='newrec'&&b.dataset.type==='scheck')};
+  if(hd){var hb=[].filter.call(hd.children,function(c){return c.matches('button.btn,label.btn')}),main=function(b){var t=b.dataset.act;return t==='topop'||t==='pdf'||t==='snap'||t==='newmeeting'||(t==='newrec'&&b.dataset.type==='scheck')};
     var rest=hb.filter(function(b){return !main(b)});if(narrow())rest=rest.filter(function(b){if(b.dataset.act==='edit'){b.remove();return false}return true});
     if(rest.length){var menu=true,wrapA=document.createElement('div');wrapA.className='acts'+(menu?' menu':'');hd.insertBefore(wrapA,rest[0]);rest.forEach(function(b){wrapA.appendChild(b)});
       var mb=document.createElement('button');mb.className='btn morebtn'+(menu?' menu':'');mb.dataset.act='more';mb.setAttribute('aria-expanded','false');mb.textContent='More';hd.insertBefore(mb,wrapA);
@@ -2799,7 +2805,7 @@ function render(focusKey){
 function showCurrent(){try{var c=rail.querySelector('[aria-current]');if(c&&rail.scrollWidth>rail.clientWidth)rail.scrollLeft=Math.max(0,c.offsetLeft-rail.clientWidth/2+c.offsetWidth/2)}catch(e){}}
 /* ---- going back: each page change is remembered, so Back (the button, the browser, or a phone's back gesture) returns to where you were ---- */
 var hist=[];
-var TOPN={dash:'Dashboard',inbox:'Inbox',actions:'Actions',week:'Week',gsched:'Schedule',sched:'Resourcing',records:'Records',bd:'Business development',team:'Team',office:'Team',projects:'Projects',settings:'Settings',archive:'Archive',rtypes:'Record templates',people:'Team',month:'Week',search:'Search',reset:'Monday planning',dump:'Friday review'};
+var TOPN={dash:'Dashboard',inbox:'Inbox',actions:'Actions',week:'Week',gsched:'Schedule',sched:'Resourcing',records:'Documents',bd:'Business development',team:'Team',office:'Team',projects:'Projects',settings:'Settings',archive:'Archive',rtypes:'Document templates',people:'Team',month:'Week',search:'Search',reset:'Monday planning',dump:'Friday review'};
 function placeName(h){if(!h)return '';if(h.v==='project'){var pj=store.projects[h.id];return pj?(pj.name||'Untitled project'):''}if(h.v==='person'){var pe=store.people[h.id];return pe?(pe.name||'Unnamed'):''}
   if(h.v==='record'){var rc=store.records[h.id];return rc?(rc.title||formDef(rc.type).name):''}if(h.v==='today')return h.id?fmtD(h.id):'Today';if(h.v==='page'){var pg=pages('page').filter(function(x){return x.id===h.id})[0];return pg?(pg.name||'Page'):''}return TOPN[h.v]||''}
 function parentOf(){if(ui.v==='record'){var rc=store.records[ui.id];if(rc&&rc.project&&store.projects[rc.project])return {v:'project',id:rc.project,tab:'records'};if(rc&&rc.person&&store.people[rc.person])return {v:'person',id:rc.person};return {v:'records'}}
@@ -2811,10 +2817,15 @@ function goBack(){var t=null;while(hist.length&&!t){var h=hist.pop();if(placeNam
   if(!t){go(parentOf().v,parentOf().id,parentOf().tab);return}
   inkSel=null;closeMenu();closeSheet();ui.step=0;ui.v=t.v;ui.id=t.id||null;ui.tab=t.tab||'sheet';ui.edit=null;ui.confirm=null;remember();render();window.scrollTo(0,t.y||0);showCurrent()}
 window.addEventListener('popstate',function(){if(hist.length)goBack()});
-/* ---- on a computer, records open in a panel over the page (like a Gmail draft): minimise it, open it full page, or close it ---- */
+/* ---- on a computer, documents open in a panel over the page (like a Gmail draft): minimise it, open it full page, or close it ---- */
 var popFull=false;ui.pop=null;ui.mins=[];
 function popOK(){try{return !single('settings').popOff&&window.matchMedia('(min-width:1100px) and (pointer:fine)').matches}catch(e){return false}}
-function openPop(id){if(ui.pop&&ui.pop!==id){ui.mins=[ui.pop].concat(ui.mins.filter(function(x){return x!==ui.pop}))}ui.mins=ui.mins.filter(function(x){return x!==id}).slice(0,5);ui.pop=id;closeMenu();closeSheet();render()}
+function noteRec(id){if(mode!=='saved'||!store.records[id])return;var S=single('state'),L=Array.isArray(S.recent)?S.recent:[];if(L[0]&&L[0].id===id)return;
+  S.recent=[{id:id,at:Date.now()}].concat(L.filter(function(x){return x&&x.id!==id})).slice(0,10);save('single','state',true)}
+function recentStrip(){var S=store.single.state,L=(S&&S.recent||[]).filter(function(x){return x&&store.records[x.id]}).slice(0,4);if(!L.length)return '';
+  return '<div class="recent nop"><span class="rlab">Recently opened</span>'+L.map(function(x){var r=store.records[x.id],pr=store.projects[r.project];
+    return '<button class="rcard2" data-go="record" data-id="'+x.id+'"><b>'+esc((r.no?r.no+'  ':'')+(r.title||formDef(r.type).name))+'</b><span>'+esc([formDef(r.type).name,pr&&pr.name,fmtD(r.date)].filter(Boolean).join(' \u00B7 '))+'</span></button>'}).join('')+'</div>'}
+function openPop(id){noteRec(id);if(ui.pop&&ui.pop!==id){ui.mins=[ui.pop].concat(ui.mins.filter(function(x){return x!==ui.pop}))}ui.mins=ui.mins.filter(function(x){return x!==id}).slice(0,5);ui.pop=id;closeMenu();closeSheet();render()}
 function popEl(){var e=document.getElementById('recpop');if(!e){e=document.createElement('div');e.id='recpop';e.className='nop';document.body.appendChild(e)}return e}
 function renderPop(){var el=popEl();if(ui.v==='record'&&ui.pop===ui.id)ui.pop=null;if(ui.pop&&!store.records[ui.pop])ui.pop=null;
   ui.mins=ui.mins.filter(function(x){return store.records[x]&&x!==ui.pop&&!(ui.v==='record'&&ui.id===x)});
@@ -2826,7 +2837,7 @@ function renderPop(){var el=popEl();if(ui.v==='record'&&ui.pop===ui.id)ui.pop=nu
     +'<div class="popbody" data-id="'+ui.pop+'">'+recBody(ui.pop)+'</div></section>'}
   h+=ui.mins.map(function(x){var r=store.records[x];return '<div class="popchip"><button class="poptitle" data-act="popshow" data-id="'+x+'" title="Open">'+esc(nm(r))+'</button><button class="popb" data-act="popfull" data-id="'+x+'" aria-label="Open full page" title="Open full page">\u2922</button><button class="popb" data-act="popclose" data-id="'+x+'" aria-label="Close" title="Close">\u00D7</button></div>'}).join('');
   el.innerHTML=h;el.classList.add('on');var nb=el.querySelector('.popbody');if(nb&&top)nb.scrollTop=top;el.querySelectorAll('textarea').forEach(grow)}
-function go(v,id,tab){if(v==='record'&&id&&!popFull&&ui.v!=='record'&&popOK()&&store.records[id]){openPop(id);return}popFull=false;ui.hideEdit=null;if(ui.v!==v||ui.id!==(id||null)){hist.push({v:ui.v,id:ui.id,tab:ui.tab,y:window.scrollY});if(hist.length>60)hist.shift();try{history.pushState({lw:hist.length},'')}catch(e){}}
+function go(v,id,tab){if(v==='record'&&id&&!popFull&&ui.v!=='record'&&popOK()&&store.records[id]){openPop(id);return}popFull=false;if(v==='record'&&id)noteRec(id);ui.hideEdit=null;if(ui.v!==v||ui.id!==(id||null)){hist.push({v:ui.v,id:ui.id,tab:ui.tab,y:window.scrollY});if(hist.length>60)hist.shift();try{history.pushState({lw:hist.length},'')}catch(e){}}
   inkSel=null;closeMenu();closeSheet();ui.step=0;ui.v=v;ui.id=id||null;ui.tab=tab||'sheet';ui.edit=null;ui.confirm=null;remember();render();window.scrollTo(0,0);showCurrent();noteVisit()}
 
 /* ================= events ================= */
@@ -3070,10 +3081,10 @@ document.addEventListener('click',function(e){
   if(act==='rmpage'){var pi=+a.dataset.i;if(ui.confirm!=='pg'+pi){ui.confirm='pg'+pi;render();return}ui.confirm=null;var gonePg=layouts().pages.splice(pi,1)[0];save('single','layouts');render();
     toast('Removed '+(gonePg.name||'it')+'. Its entries are kept.',function(){layouts().pages.splice(pi,0,gonePg);save('single','layouts');render()});return}
   if(act==='new'){var nd=kind==='projects'?newProject(''):newPerson('');if(kind==='projects'){nd.ptype=a.dataset.scope==='internal'?'internal':'client';if(a.dataset.scope==='internal')nd.scope='internal'}var id=put(kind,newId(),nd);ui.v=kind==='projects'?'project':'person';ui.id=id;ui.tab='sheet';remember();render(kind+'|'+id+'|name');window.scrollTo(0,0);return}
-  if(act==='newrec'){var type=a.dataset.type||ui.rtype;if(!type){toast('Choose a type of record first.');return}
+  if(act==='newrec'){var type=a.dataset.type||ui.rtype;if(!type){toast('Choose a type of document first.');return}
     if(a.dataset.folder)a.dataset.project=internalProject(a.dataset.folder);var rid=newRecord(type,a.dataset.project,a.dataset.person);go('record',rid);render('records|'+rid+'|title');return}
   if(act==='del'){if(ui.confirm!=='del'){ui.confirm='del';render();return}
-    d=store[kind][ui.id];var back=kind==='records'?'records':'dash';delDoc(kind,ui.id,kind==='records'?'the record':(d.name||'it'));ui.confirm=null;if(backTarget()){ui.confirm=null;goBack();return}ui.v=back;ui.id=null;remember();render();return}
+    d=store[kind][ui.id];var back=kind==='records'?'records':'dash';delDoc(kind,ui.id,kind==='records'?'the document':(d.name||'it'));ui.confirm=null;if(backTarget()){ui.confirm=null;goBack();return}ui.v=back;ui.id=null;remember();render();return}
   if(act==='archive'){d=store[kind][ui.id];d.archived=!d.archived;save(kind,ui.id);toast(d.archived?'Archived. Find it under Archive and snapshots.':'Restored');if(d.archived){ui.v='dash';ui.id=null;remember()}render();return}
   if(act==='restore'){store[kind][a.dataset.id].archived=false;save(kind,a.dataset.id);render();toast('Restored');return}
   if(act==='clearticks'){Object.keys(store.people).forEach(function(pid){var p=store.people[pid];if(p.dash&&p.dash.checked){p.dash.checked=false;save('people',pid)}});render();toast('Check-ins cleared');return}
@@ -3105,6 +3116,7 @@ document.addEventListener('click',function(e){
     toast('Photo removed',function(){back=true;pd.row.ph.splice(Math.min(pj,pd.row.ph.length),0,gone);save(pd.q[0],pd.q[1]);render()});
     setTimeout(function(){if(!back&&root)root.collection('img').doc(gone.id).delete().catch(function(){})},15000);return}
   if(act==='regword'||act==='regxls'){var gq=a.dataset.key.split('|'),gdoc=store[gq[0]][gq[1]];if(!gdoc)return;exportReg(gdoc,gq[2],a.dataset.t,act==='regxls');return}
+  if(act==='topop'){var tp=ui.id;goBack();if(ui.v==='record'){popFull=false;ui.v='records';ui.id=null;render()}openPop(tp);return}
   if(act==='popmin'){if(ui.pop){ui.mins=[ui.pop].concat(ui.mins);ui.pop=null;render()}return}
   if(act==='popshow'){openPop(a.dataset.id);return}
   if(act==='popclose'){var pc=a.dataset.id||ui.pop;if(pc===ui.pop)ui.pop=null;ui.mins=ui.mins.filter(function(x){return x!==pc});render();return}
@@ -3122,7 +3134,7 @@ document.addEventListener('click',function(e){
     if(!plain(nh).trim()&&!hasInk){toast('There is nothing in these notes yet.');return}
     var nrid=newRecord('general','',''),nr=store.records[nrid];nr.title='Notes from the dashboard, '+fmtD(today());nr.d.notes=nh;if(hasInk)nr.d.notes_ink=clone(nk);save('records',nrid,true);
     var was={h:nh,k:nk?clone(nk):null};dd[np]='';delete dd[np+'_ink'];save('single','dash',true);
-    go('record',nrid);toast('Moved into a General notes record. File it from here or from the Inbox.',function(){dd[np]=was.h;if(was.k)dd[np+'_ink']=was.k;save('single','dash',true);remove('records',nrid);if(ui.v==='record'&&ui.id===nrid)goBack();else render()});return}
+    go('record',nrid);toast('Moved into a General notes document. File it from here or from the Inbox.',function(){dd[np]=was.h;if(was.k)dd[np+'_ink']=was.k;save('single','dash',true);remove('records',nrid);if(ui.v==='record'&&ui.id===nrid)goBack();else render()});return}
   if(act==='hideedit'){ui.hideEdit=ui.hideEdit===ui.id?null:ui.id;render();return}
   if(act==='back'){if(hist.length)history.back();else goBack();return}
   if(act==='capnew'){closeSheet();var cr=newRecord(a.dataset.type,'','');go('record',cr);render('records|'+cr+'|title');return}
