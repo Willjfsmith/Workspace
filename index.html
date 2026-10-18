@@ -2183,7 +2183,7 @@ function currentModel(){var v=ui.v,d,nm;
     var acts=[],rest=(F.rows||[]).map(function(rw){var o={};for(var z in rw)o[z]=rw[z];o.cols=(rw.cols||[]).map(function(c){return {b:(c.b||[]).filter(function(b){if(b.k==='actions'&&b.kind==='table'){acts.push(b);return false}return true})}});return o}).filter(function(rw){return rw.cols.some(function(c){return c.b.length})});
     if(acts.length)rest.push({cols:[{b:acts}]});
     var dr=d.status==='draft',st=d.status?(dr?'DRAFT':'Final'):'';
-    return {title:d.title||F.name,kicker:F.name,sub:st,draft:dr,runhead:[d.title||F.name,d.no,dr?'DRAFT':''].filter(Boolean).join('  \u00B7  '),meta:meta,rows:mRows(d,'d.',rest)}}
+    return {fname:d.no?fileName(d.no+(d.title?' - '+d.title:'')):'',title:d.title||F.name,kicker:F.name,sub:st,draft:dr,runhead:[d.title||F.name,d.no,dr?'DRAFT':''].filter(Boolean).join('  \u00B7  '),meta:meta,rows:mRows(d,'d.',rest)}}
   return null}
 function recordsModel(filter){var recs=Object.keys(store.records).map(function(id){return store.records[id]}).filter(filter).sort(function(a,b){return (a.date||'')<(b.date||'')?1:-1});
   return {t:'Records',kind:'table',cols:[{label:'Date',w:.6},{label:'Form',w:.9},{label:'Title',w:1.2},{label:'Summary',w:2}],rows:recs.map(function(r){return [fmtL(r.date),formDef(r.type).name,r.title||'',recSummary(r)]})}}
@@ -2336,7 +2336,7 @@ function makeDocx(m){var D=window.docx,F='Arial',INK='111111',MID='6B6B6B',RED='
     sections:[{properties:{page:{size:{width:11906,height:16838,orientation:land?D.PageOrientation.LANDSCAPE:D.PageOrientation.PORTRAIT},margin:{top:720,bottom:720,left:720,right:720}}},footers:{default:foot},headers:head2?{default:head2}:undefined,children:body}]})}
 function exportWord(model,name){if(!model)return;toast('Preparing the Word document');
   loadDocx().then(function(){return loadPics(model)}).then(function(){return window.docx.Packer.toBlob(makeDocx(model))}).then(function(bl){return bl.arrayBuffer()})
-  .then(function(buf){download(name||(slug((model.kicker&&model.kicker!==model.title?model.kicker+'_':'')+model.title)+'_'+today()+'.docx'),buf)},
+  .then(function(buf){download(name||(model.fname?model.fname+'.docx':slug((model.kicker&&model.kicker!==model.title?model.kicker+'_':'')+model.title)+'_'+today()+'.docx'),buf)},
     function(e){toast(window.docx?'That page could not be turned into a Word document.':'The Word library did not load. Check your connection and reload.')})}
 /* ---- Back up as Word: one document per project, person, record and workspace page, written flat into a folder you choose ---- */
 function bkLine(){var lb=single('settings').lastBackup;if(!lb||!lb.at)return 'Not backed up as Word yet.';var d=new Date(lb.at),days=Math.floor((Date.now()-d.getTime())/864e5);
@@ -2395,7 +2395,7 @@ function loadPics(model){var jobs=[];
     im.onerror=fin;setTimeout(fin,7000);im.crossOrigin='anonymous';try{im.src=it.url}catch(e){fin()}})}))}
 function exportPdf(model,name){if(!model)return;loadPics(model).then(function(){exportPdfNow(model,name)})}
 function exportPdfNow(model,name){var buf;try{buf=makePdf(model)}catch(e){toast(e&&e.message==='nopdf'?'The PDF library did not load. Check your connection and reload.':'That page could not be turned into a PDF.');return}
-  download(name||slug((model.kicker&&model.kicker!==model.title?model.kicker+'_':'')+model.title)+'_'+today()+'.pdf',buf)}
+  download(name||(model.fname?model.fname+'.pdf':slug((model.kicker&&model.kicker!==model.title?model.kicker+'_':'')+model.title)+'_'+today()+'.pdf'),buf)}
 window.__lw={model:function(){return currentModel()},pdf:makePdf};
 
 /* ================= handwriting and sketching =================
