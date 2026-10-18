@@ -785,6 +785,10 @@ li:hover > .aupdb,.aupdb:focus-visible{opacity:1}
 #topbar .undob + button{margin-left:6px}
 .rich h3{font-size:1.02rem; font-weight:600; margin:10px 0 2px; font-family:var(--head)}
 .rich h3:first-child{margin-top:0}
+.recno{font-variant-numeric:tabular-nums; font-size:.75rem; color:var(--muted); border:1px solid var(--rule); border-radius:2px; padding:0 4px; white-space:nowrap}
+.rtopt{display:flex !important; flex-wrap:wrap; gap:6px 16px; background:var(--rail); padding:8px 12px !important; font-size:.82rem}
+.rtfmt{display:flex; flex-wrap:wrap; gap:6px 10px; align-items:center; margin:0 0 10px; font-size:.85rem}
+.rtfmt .meta{flex:1 1 300px}
 </style>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
 <script src="firebase-config.js"></script>
@@ -1200,6 +1204,19 @@ function getLayout(lid){var own=layouts().L[lid];
   if(lid==='sheet'&&own&&own.rows&&!hasKey(own,'library'))own.rows.splice(Math.min(1,own.rows.length),0,L(null,LIB()));   /* layouts edited before the library existed gain it */
   return own||DEFAULTS[lid]||(lid.indexOf('pt_')===0?ptDefault(lid):null)||{rows:[]}}
 function rtSet(){var st=single('settings');if(!st.formNames||typeof st.formNames!=='object')st.formNames={};if(!st.formOff||typeof st.formOff!=='object')st.formOff={};return st}
+var RT_DEF={meeting:{num:1,prefix:'MIN',status:1,title:''},review:{num:1,prefix:'REV',status:1},decision:{num:1,prefix:'DEC',status:1},calc:{num:1,prefix:'CALC',status:1},
+  brief:{prefix:'BRF',status:1},options:{prefix:'OPT'},site:{num:1,prefix:'SITE'},siteday:{prefix:'DIA'},call:{prefix:'CALL'},general:{prefix:'NOTE'},sketch:{prefix:'SK'},checklist:{prefix:'CL'},handover:{prefix:'HO'},
+  pcheck:{prefix:'PCI'},scheck:{prefix:'SCI'},interview:{prefix:'INT'},proposal:{prefix:'PROP'}};
+function rtConf(type){var st=rtSet();if(!st.rt||typeof st.rt!=='object')st.rt={};var d=RT_DEF[type]||{prefix:String(formDef(type).name||'REC').split(/\s+/).map(function(w){return w.charAt(0)}).join('').toUpperCase().slice(0,4)},o=st.rt[type]||{},out={};
+  ['num','prefix','status','title','ink'].forEach(function(k){out[k]=o[k]!=null?o[k]:d[k]});out.num=!!out.num;out.status=!!out.status;out.ink=!!out.ink;out.prefix=String(out.prefix||'REC').trim()||'REC';return out}
+function projCode(p){if(!p)return '';var c=String(p.code||'').trim();if(c)return c.toUpperCase();var w=String(p.name||'').trim().split(/\s+/).filter(Boolean);
+  if(w.length===1)return w[0].replace(/[^A-Za-z0-9]/g,'').slice(0,5).toUpperCase();return w.map(function(x){return x.charAt(0)}).join('').replace(/[^A-Za-z0-9]/g,'').slice(0,5).toUpperCase()}
+function recNumber(type,pid,exclude){var c=rtConf(type),pc=projCode(store.projects[pid]),max=0;
+  Object.keys(store.records).forEach(function(id){var r=store.records[id];if(id!==exclude&&r&&r.type===type&&(r.project||'')===(pid||'')&&r.seq>max)max=r.seq});
+  var n=max+1,f=String(rtSet().numFmt||'{type}-{project}-{n}');
+  var no=f.replace('{type}',c.prefix).replace('{project}',pc).replace('{year}',today().slice(0,4)).replace('{n}',('00'+n).slice(-3)).replace(/--+/g,'-').replace(/^-|-$/g,'');return {no:no,seq:n}}
+function fillTitle(r){var c=rtConf(r.type);if(!c.title||r.title)return;var pr=store.projects[r.project];
+  r.title=String(c.title).replace('{project}',pr?pr.name||'':'').replace('{date}',fmtD(r.date||today())).replace('{type}',formDef(r.type).name).replace('{no}',r.no||'').replace(/\s+[-\u2013|,]\s*$/,'').replace(/^\s*[-\u2013|,]\s+/,'').trim()}
 function recName(k){var n=rtSet().formNames[k];return n&&String(n).trim()?n:(FORMS[k]||{}).name||'Record'}
 function formOn(k){return !rtSet().formOff[k]}
 function formDef(type){var F=FORMS[type];if(F)return {name:recName(type),title:F.title,rows:getLayout('f_'+type).rows,lid:'f_'+type};
@@ -1224,7 +1241,10 @@ function newMeeting(pid){var last=Object.keys(store.records).map(function(id){re
   toast(last&&last.d&&last.d.attendees?'New meeting notes, with attendees from the last meeting':'New meeting notes for this project')}
 function newRecord(type,project,person){var r={type:type,title:'',date:today(),project:project||'',person:person||'',ts:Date.now(),d:{}};
   if(type.indexOf('checklist:')===0){var t=templates()[+type.slice(10)];r.type='checklist';if(t){r.title=t.name||'';r.d.items=fromTemplate(t).items}}
-  return put('records',newId(),r)}
+  var c=rtConf(r.type);if(c.num){var nn=recNumber(r.type,r.project);r.no=nn.no;r.seq=nn.seq}if(c.status)r.status='draft';fillTitle(r);
+  var rid=put('records',newId(),r);
+  if(c.ink&&DEVNAME==='iPad'){var rows=formDef(r.type).rows||[],first=null;rows.forEach(function(rw){(rw.cols||[]).forEach(function(cl){(cl.b||[]).forEach(function(b){if(first||b.hidden)return;if(b.kind==='rich')first='d.'+b.k;else if(b.kind==='agenda'){if(!Array.isArray(r.d[b.k])||!r.d[b.k].length)r.d[b.k]=[{h:'',notes:''}];first='d.'+b.k+'.0.notes'}})})});if(first)inkOpen['records|'+rid+'|'+first]=true}
+  return rid}
 function ckCount(r){var it=(r&&r.d&&r.d.items||[]).filter(function(i){return i&&i.t});return {n:it.length,d:it.filter(function(i){return i.done||i.na}).length}}
 function recSummary(r){if(r.type==='checklist'){var c=ckCount(r);return c.n?(c.d===c.n?'Complete, ':'')+c.d+' of '+c.n+' done':''}return (r.d||{}).summary||''}
 /* project types: each has its own header fields, tabs and (optionally) its own sheet layout. Kept in Settings, so they sync. */
@@ -1493,7 +1513,7 @@ function recordList(filter,emptyMsg){
   var recs=Object.keys(store.records).map(function(id){return {id:id,d:store.records[id]}}).filter(filter).sort(function(a,b){return (a.d.date||'')<(b.d.date||'')?1:(a.d.date||'')>(b.d.date||'')?-1:(b.d.ts||0)-(a.d.ts||0)});
   if(!recs.length)return '<p class="empty">'+emptyMsg+'</p>';
   return '<ul class="list">'+recs.map(function(x){var r=x.d,p=store.projects[r.project],e=store.people[r.person],sum=recSummary(r);
-    return '<li><span class="d">'+fmtL(r.date)+'</span><button class="link" data-go="record" data-id="'+x.id+'">'+esc(r.title||'Untitled')+'</button><span class="k">'+esc(formDef(r.type).name)+'</span>'
+    return '<li><span class="d">'+fmtL(r.date)+'</span>'+(r.no?'<span class="recno">'+esc(r.no)+'</span>':'')+'<button class="link" data-go="record" data-id="'+x.id+'">'+esc(r.title||'Untitled')+'</button><span class="k">'+esc(formDef(r.type).name)+(r.status==='draft'?', draft':'')+'</span>'
       +(sum?'<span>'+esc(sum)+'</span>':'')+'<span class="sp"></span><span class="k">'+esc([p&&p.name,e&&e.name].filter(Boolean).join(', '))+'</span></li>'}).join('')+'</ul>'}
 function newRecordCtl(project,person,folder){return '<select class="newrec" data-newrec="1" data-project="'+(project||'')+'" data-person="'+(person||'')+'" data-folder="'+esc(folder||'')+'" aria-label="New record">'+opts([['','New record\u2026']].concat(formGroups()),'')+'</select>'}
 var V={};
@@ -1943,7 +1963,7 @@ V.project=function(){
   var TABL=[['wiki','Project wiki'],['records','Records']].concat(ctabs.map(function(p){return ['c_'+p.id,p.name||'Untitled']})).filter(function(t){return tabOn(d,t[0])});
   var pt=ptypeOf(d);if(!tabOn(d,ui.tab))ui.tab='sheet';
   var lid=ui.tab==='sheet'?sheetLid(d):ui.tab==='wiki'||ui.tab.indexOf('c_')===0?ui.tab:null;
-  var HF=[];if(pt.fields.client)HF.push(['client','Client',1.4]);if(pt.fields.phase)HF.push(['phase','Phase',.9,'select',PHASES]);if(pt.fields.status)HF.push(['status','Status',.8,'select',STATUS]);HF.push(['ptype','Type',.8,'select',ptypeOpts]);
+  var HF=[];if(pt.fields.client)HF.push(['client','Client',1.4]);if(pt.fields.phase)HF.push(['phase','Phase',.9,'select',PHASES]);if(pt.fields.status)HF.push(['status','Status',.8,'select',STATUS]);HF.push(['ptype','Type',.8,'select',ptypeOpts]);HF.push(['code','Code',.45]);
   var h='<div class="head"><h1 class="hname">'+mark(pt.fields.status?d.status:'')+' '+nameIn('projects',id,'Untitled project','Project name')+'</h1><span class="sp"></span>'+updated(d)+(ui.edit?'':'<button class="btn" data-act="newmeeting">Meeting</button>')+pdfBtn+(lid&&!ui.edit?editBtn(lid)+(ui.tab==='sheet'?'<button class="btn" data-act="edit" data-lid="own:projects:'+id+'">Add sections to this project only</button>':''):'')
     +(ui.edit?'':'<button class="btn" data-act="hideedit">Show or hide sections</button>')+'<button class="btn" data-act="archive" data-kind="projects">'+(d.archived?'Restore from archive':'Archive')+'</button><button class="btn danger" data-act="del" data-kind="projects">'+(ui.confirm==='del'?'Confirm delete':'Delete')+'</button></div>'
     +hfields('projects',id,HF)
@@ -2048,7 +2068,9 @@ V.record=function(){
   var id=ui.id,r=store.records[id];if(!r){ui.v='records';return V.records()}
   var F=formDef(r.type);if(ui.edit&&F.lid)return '<div class="head"><h1>'+esc(F.name)+'</h1></div>'+editor(F.lid);
   return '<div class="head"><h1>'+esc(F.name)+'</h1><span class="sp"></span>'+updated(r)+pdfBtn+(F.lid?editBtn(F.lid):'')+'<button class="btn danger" data-act="del" data-kind="records">'+(ui.confirm==='del'?'Confirm delete':'Delete')+'</button></div>'
-    +hfields('records',id,[['title',F.title,1.6],['date','Date',.8,'date'],['project','Project',1,'select',projOpts],['person','Person',1,'select',peopleOpts]])
+    +hfields('records',id,(function(){var c=rtConf(r.type),H=[];if(c.num||r.no)H.push(['no','No.',.55]);H.push(['title',F.title,1.6],['date','Date',.8,'date'],['project','Project',1,'select',projOpts],['person','Person',1,'select',peopleOpts]);
+      if(c.status||r.status)H.push(['status','Status',.6,'select',[['draft','Draft'],['final','Final']]]);return H})())
+    +(rtConf(r.type).num&&!r.no?'<p class="unfnote nop">No number yet. <button class="mini" data-act="recnum" data-id="'+id+'">Give it the next number</button></p>':'')
     +(!r.project&&!r.person&&!r.filed?'<p class="unfnote nop">In your inbox until you choose a project or person. <button class="mini" data-act="keepunf" data-id="'+id+'">Keep unfiled</button></p>':'')+rRows('records',id,'d.',F.rows);
 };
 V.search=function(){var res=search(ui.q);
@@ -2063,17 +2085,26 @@ V.rtypes=function(){var head='<div class="head"><h1>Record templates</h1><span c
   if(ui.edit)return head+editor(ui.edit);
   var cnt={};Object.keys(store.records).forEach(function(id){var t=store.records[id].type;cnt[t]=(cnt[t]||0)+1});
   var nrec=function(n){return n?n+(n===1?' record':' records'):'No records yet'};
+  var optRow=function(type){if(ui.rtOpen!==type)return '';var c=rtConf(type),P='single|settings|rt.'+type+'.';
+      return '<li class="rtopt"><label class="ptck"><input type="checkbox" data-b="'+P+'num" data-k="'+P+'num" data-rr="1"'+(c.num?' checked':'')+'> Number these records</label>'
+        +'<label class="ptck">Prefix <input class="ein" style="width:70px" data-b="'+P+'prefix" data-k="'+P+'prefix" data-rr="1" value="'+esc(c.prefix)+'"></label>'
+        +'<label class="ptck"><input type="checkbox" data-b="'+P+'status" data-k="'+P+'status" data-rr="1"'+(c.status?' checked':'')+'> Draft / Final status</label>'
+        +'<label class="ptck"><input type="checkbox" data-b="'+P+'ink" data-k="'+P+'ink" data-rr="1"'+(c.ink?' checked':'')+'> Open with handwriting on the iPad</label>'
+        +'<label class="ptck" style="flex:1 1 260px">Default title <input class="ein" style="flex:1" data-b="'+P+'title" data-k="'+P+'title" value="'+esc(c.title||'')+'" placeholder="e.g. {project} weekly, {date}"></label></li>'};
+  var optBtn=function(type){return '<button class="mini" data-act="rtopt" data-t="'+type+'" aria-expanded="'+(ui.rtOpen===type)+'">Options</button>'};
   var onBox=function(key,on){return '<label class="ptck" title="Offer it in the New record menus"><input type="checkbox" data-rton="'+key+'"'+(on?' checked':'')+'> In menus</label>'};
   var all=pages(),gsel=function(i,v){return '<select class="newrec" data-b="single|layouts|pages.'+i+'.grp" data-k="rtg|'+i+'" data-rr="1" aria-label="Group">'+opts(RGROUPS.map(function(g){return [g[0],g[1]]}).concat([['','Your types']]),v||'')+'</select>'};
   var order=[].concat.apply([],RGROUPS.map(function(g){return g[2]})).concat(Object.keys(FORMS).filter(function(k){return k!=='checklist'&&!RGROUPS.some(function(g){return g[2].indexOf(k)>=0})})).concat(['checklist']);
   var gh=function(k){var g=RGROUPS.filter(function(x){return x[2][0]===k})[0];return g?'<li class="rtgh">'+esc(g[1])+'</li>':k==='checklist'?'<li class="rtgh">'+esc(recName('checklist'))+'s</li>':''};
   var forms=order.filter(function(k){return FORMS[k]}).map(function(k){return gh(k)+'<li><input class="ein" data-b="single|settings|formNames.'+k+'" data-k="rtn|'+k+'" data-rr="1" value="'+esc(recName(k))+'" placeholder="'+esc(FORMS[k].name)+'" aria-label="Name for '+esc(FORMS[k].name)+'" style="flex:0 1 240px">'
-        +'<span class="k">Built in'+(k==='checklist'?', the blank checklist':'')+' \u00B7 '+nrec(cnt[k])+'</span><span class="sp"></span>'+onBox('f|'+k,formOn(k))+'<button class="mini" data-act="edit" data-lid="f_'+k+'">Edit layout</button></li>'}).join('')
+        +'<span class="k">Built in'+(k==='checklist'?', the blank checklist':'')+' \u00B7 '+nrec(cnt[k])+(rtConf(k).num?' \u00B7 '+esc(rtConf(k).prefix)+'-\u2026':'')+'</span><span class="sp"></span>'+onBox('f|'+k,formOn(k))+optBtn(k)+'<button class="mini" data-act="edit" data-lid="f_'+k+'">Edit layout</button></li>'+optRow(k)}).join('')
     +(all.some(function(p){return p.scope==='form'})?'<li class="rtgh">Your types</li>':'')+all.map(function(p,i){if(p.scope!=='form')return '';var nk='single|layouts|pages.'+i+'.name';
       return '<li><input class="ein" data-b="'+nk+'" data-k="'+nk+'" data-rr="1" value="'+esc(p.name)+'" placeholder="Name" aria-label="Name" style="flex:0 1 240px"><span class="k">Yours \u00B7 '+nrec(cnt['c_'+p.id])+'</span><span class="sp"></span>'+gsel(i,p.grp)
-        +onBox('c|'+i,!p.off)+'<button class="mini" data-act="edit" data-lid="c_'+p.id+'">Edit layout</button><button class="mini" data-act="rmpage" data-i="'+i+'">'+(ui.confirm==='pg'+i?'Confirm remove':'Remove')+'</button></li>'}).join('');
+        +onBox('c|'+i,!p.off)+optBtn('c_'+p.id)+'<button class="mini" data-act="edit" data-lid="c_'+p.id+'">Edit layout</button><button class="mini" data-act="rmpage" data-i="'+i+'">'+(ui.confirm==='pg'+i?'Confirm remove':'Remove')+'</button></li>'+optRow('c_'+p.id)}).join('');
   var tp=templates();
-  return head+'<p class="meta" style="margin:-4px 0 10px">Every type of record you can create. Rename them, change their layout, take them out of the New record menus, or add your own. Records already made keep their content.</p>'
+  var fmt=rtSet().numFmt||'{type}-{project}-{n}';
+  return head+'<div class="rtfmt nop"><b>Record numbers</b> <input class="ein" data-b="single|settings|numFmt" data-k="numfmt" data-rr="1" value="'+esc(fmt)+'" style="width:220px" aria-label="Number format"><span class="meta">{type} is the prefix, {project} the project code (set it in each project\u2019s Code field, or it is made from the name), {n} the running number, {year} the year. Example: '+esc(recNumber('meeting','').no.replace(/^/,''))+'</span></div>'
+    +'<p class="meta" style="margin:-4px 0 10px">Every type of record you can create. Rename them, change their layout, take them out of the New record menus, or add your own. Records already made keep their content.</p>'
     +'<div class="g">'+box('Record types','<ul class="list rtl">'+forms+'</ul>'
       +'<div class="head" style="padding:8px 9px 10px;margin:0;border-top:1px solid var(--rule)"><input class="ein" data-ui="rtname" data-k="ui|rtname" value="'+esc(ui.rtname||'')+'" placeholder="Name of a new record type, e.g. Site diary" aria-label="Name of a new record type" style="flex:1 1 220px"><button class="btn pri" data-act="addrtype">Create and lay it out</button></div>',
       'Clear a built-in name to go back to the original')+'</div>'
@@ -2142,8 +2173,12 @@ function currentModel(){var v=ui.v,d,nm;
       rows:all.sort(function(a,b){return (a.due||'9')<(b.due||'9')?-1:1}).map(function(a){var p=store.projects[a.project];return [false,a.t,a.who||'',isLate(a)?[{t:fmtL(a.due)+' (overdue)',s:'warn'}]:fmtL(a.due),a.src||(p?p.name:'')]})}]]}]}}
   if(v==='today'){var ddp=isDate(ui.id)?ui.id:today(),dob2=day(ddp);return {title:at(ddp).toLocaleDateString(undefined,{weekday:'long',day:'numeric',month:'long',year:'numeric'}),kicker:'Day',
     rows:[{cols:[[{t:'Completed this day',kind:'table',min:1,cols:[{label:'',w:2},{label:'From',w:1}],rows:doneIn(ddp,ddp).map(function(x){return [x.t,x.src||'']})}]]},{cols:[[recordsModel(function(x){return x.date===ddp})]]}]}}
-  if(v==='record'){d=store.records[ui.id];var F=formDef(d.type),p=store.projects[d.project],e=store.people[d.person];
-    return {title:d.title||F.name,kicker:F.name,meta:[['Date',fmtL(d.date)],['Project',p?p.name:''],['Person',e?e.name:'']].filter(function(m){return m[1]}),rows:mRows(d,'d.',F.rows)}}
+  if(v==='record'){d=store.records[ui.id];var F=formDef(d.type),p=store.projects[d.project],e=store.people[d.person],inf=(d.d||{}).info||{};
+    var meta=[['No.',d.no],['Date',fmtL(d.date)+(inf.time?', '+inf.time:'')],['Project',p?p.name:''],['Person',e?e.name:''],['Location',inf.location]].filter(function(m){return m[1]});
+    var acts=[],rest=(F.rows||[]).map(function(rw){var o={};for(var z in rw)o[z]=rw[z];o.cols=(rw.cols||[]).map(function(c){return {b:(c.b||[]).filter(function(b){if(b.k==='actions'&&b.kind==='table'){acts.push(b);return false}return true})}});return o}).filter(function(rw){return rw.cols.some(function(c){return c.b.length})});
+    if(acts.length)rest.push({cols:[{b:acts}]});
+    var dr=d.status==='draft',st=d.status?(dr?'DRAFT':'Final'):'';
+    return {title:d.title||F.name,kicker:F.name,sub:st,draft:dr,runhead:[d.title||F.name,d.no,dr?'DRAFT':''].filter(Boolean).join('  \u00B7  '),meta:meta,rows:mRows(d,'d.',rest)}}
   return null}
 function recordsModel(filter){var recs=Object.keys(store.records).map(function(id){return store.records[id]}).filter(filter).sort(function(a,b){return (a.date||'')<(b.date||'')?1:-1});
   return {t:'Records',kind:'table',cols:[{label:'Date',w:.6},{label:'Form',w:.9},{label:'Title',w:1.2},{label:'Summary',w:2}],rows:recs.map(function(r){return [fmtL(r.date),formDef(r.type).name,r.title||'',recSummary(r)]})}}
@@ -2172,7 +2207,7 @@ function makePdf(m){
       font(false,false,9,MID);var right=[m.kicker,m.sub].filter(Boolean).join('  |  ');if(right)doc.text(right,W-M,M+12,{align:'right'});y=M+30;
       if(m.meta&&m.meta.length){var fw=FW/m.meta.length;m.meta.forEach(function(f,i){var x=M+i*fw;font(false,false,8,MID);doc.text(f[0],x,y+8);var lw=doc.getTextWidth(f[0])+6;
           font(false,false,10);doc.text(doc.splitTextToSize(String(f[1]||''),fw-lw-14)[0]||'',x+lw,y+8);stroke(LINE,.7);doc.line(x+lw,y+11,x+fw-(i<m.meta.length-1?12:0),y+11)});y+=24}}
-    else{font(false,false,8,MID);doc.text(m.title+(m.kicker?'  |  '+m.kicker:''),M,M+6);y=M+16}}
+    else{font(false,false,8,m.draft?RED:MID);doc.text(m.runhead||(m.title+(m.kicker?'  |  '+m.kicker:'')),M,M+6);y=M+16}}
   function footers(){var n=doc.getNumberOfPages();for(var i=1;i<=n;i++){doc.setPage(i);font(false,false,7,MID);doc.text('Page '+i+' of '+n,W-M,H-M+4,{align:'right'});doc.text('Exported '+fmtL(today()),M,H-M+4)}}
   function tick(x,yy,on){stroke(LINE,.7);doc.rect(x,yy,7,7);if(on){stroke(INK,1.1);doc.line(x+1.4,yy+3.8,x+3,yy+5.6);doc.line(x+3,yy+5.6,x+5.8,yy+1.4)}}
   /* a box becomes a list of items, each with a height and a draw function */
@@ -2283,9 +2318,10 @@ function makeDocx(m){var D=window.docx,F='Arial',INK='111111',MID='6B6B6B',RED='
     else if(b.kind==='files'){(b.items||[]).forEach(function(it){if(it.data){body.push(P(img(bytesOf(it.data),it.w,it.h,320),{after:20}));body.push(P(R(it.name,{col:MID,size:16})))}else body.push(P(R(it.name+(it.type?'  ('+it.type+')':''))))});if(!(b.items||[]).length)body.push(P(R('')))}
     else body.push(tbl(b.cols||[{label:'',w:1}],b.rows||[]))})})});
   body.push(P(R('')));
+  var head2=m.runhead?new D.Header({children:[P([R(m.runhead,{col:m.draft?RED:MID,size:16,b:!!m.draft})],{align:D.AlignmentType.RIGHT})]}):null;
   var foot=new D.Footer({children:[P([R('Exported '+fmtL(today())+'      Page ',{col:MID,size:16}),new D.TextRun({children:[D.PageNumber.CURRENT],color:MID,size:16,font:F}),R(' of ',{col:MID,size:16}),new D.TextRun({children:[D.PageNumber.TOTAL_PAGES],color:MID,size:16,font:F})],{align:D.AlignmentType.RIGHT})]});
   return new D.Document({creator:'Workspace',title:m.title||'',styles:{default:{document:{run:{font:F,size:19,color:INK}}}},
-    sections:[{properties:{page:{size:{width:11906,height:16838,orientation:land?D.PageOrientation.LANDSCAPE:D.PageOrientation.PORTRAIT},margin:{top:720,bottom:720,left:720,right:720}}},footers:{default:foot},children:body}]})}
+    sections:[{properties:{page:{size:{width:11906,height:16838,orientation:land?D.PageOrientation.LANDSCAPE:D.PageOrientation.PORTRAIT},margin:{top:720,bottom:720,left:720,right:720}}},footers:{default:foot},headers:head2?{default:head2}:undefined,children:body}]})}
 function exportWord(model,name){if(!model)return;toast('Preparing the Word document');
   loadDocx().then(function(){return loadPics(model)}).then(function(){return window.docx.Packer.toBlob(makeDocx(model))}).then(function(bl){return bl.arrayBuffer()})
   .then(function(buf){download(name||(slug((model.kicker&&model.kicker!==model.title?model.kicker+'_':'')+model.title)+'_'+today()+'.docx'),buf)},
@@ -2308,7 +2344,7 @@ function backupDocs(){var out=[],used={},add=function(name,model){if(!model)retu
     var parts=[['person',x.id,'sheet','Person sheet']].concat(pages('person').map(function(pg){return ['person',x.id,'c_'+pg.id,pg.name||'Tab']}));
     add('Person - '+(x.d.name||'Unnamed')+(x.d.archived?' (archived)':''),combine(parts))});
   Object.keys(store.records).map(function(id){return {id:id,d:store.records[id]}}).sort(function(a,b){return String(a.d.date||'').localeCompare(String(b.d.date||''))}).forEach(function(x){var r=x.d,pr=store.projects[r.project];
-    add('Record - '+(r.date||'undated')+' - '+formDef(r.type).name+(r.title?' - '+r.title:'')+(pr&&pr.name&&String(r.title||'').indexOf(pr.name)<0?' - '+pr.name:''),modelFor('record',x.id))});
+    add('Record - '+(r.no?r.no+' - ':'')+(r.date||'undated')+' - '+formDef(r.type).name+(r.title?' - '+r.title:'')+(pr&&pr.name&&String(r.title||'').indexOf(pr.name)<0?' - '+pr.name:''),modelFor('record',x.id))});
   [['dash','Dashboard'],['actions','Actions'],['gsched','Schedule'],['sched','Resourcing'],['bd','Business development'],['team','Team']].forEach(function(w){add('Workspace - '+w[1],modelFor(w[0],null))});
   pages('page').forEach(function(pg){add('Workspace - '+(pg.name||'Page'),modelFor('page',pg.id))});
   return out}
@@ -2619,7 +2655,8 @@ document.addEventListener('input',function(e){
   if(d.tcf){var cq=d.tcf.split('|'),cci=cq.pop(),ctk=cq.join('|'),ctv=ui.tv[ctk]||(ui.tv[ctk]={});ctv.cf=ctv.cf||{};if(el.value)ctv.cf[cci]=el.value.slice(1);else delete ctv.cf[cci];render();return}
   if(d.r){var r=d.r.split('|');if(!store[r[0]][r[1]])return;setp(store[r[0]][r[1]],r[2],cleanHtml(el.innerHTML));save(r[0],r[1]);return}
   if(d.b){var p=d.b.split('|');if(!store[p[0]][p[1]])return;setp(store[p[0]][p[1]],p[2],val(el));
-    if(p[0]==='projects'&&p[2]==='ptype'){var npt=ptypes().filter(function(t){return t.id===el.value})[0];store.projects[p[1]].scope=npt&&npt.internal?'internal':'';needRender=true}save(p[0],p[1]);if(d.rr)needRender=true;return}
+    if(p[0]==='projects'&&p[2]==='ptype'){var npt=ptypes().filter(function(t){return t.id===el.value})[0];store.projects[p[1]].scope=npt&&npt.internal?'internal':'';needRender=true}
+    if(p[0]==='records'&&p[2]==='project'){var rp=store.records[p[1]];if(rp.no&&rtConf(rp.type).num){var rn3=recNumber(rp.type,rp.project,p[1]);rp.no=rn3.no;rp.seq=rn3.seq;needRender=true}}save(p[0],p[1]);if(d.rr)needRender=true;return}
   if(d.l){var q=d.l.split('|'),doc=store[q[0]][q[1]];if(!doc)return;var arr=get(doc,q[2]);
     if(!Array.isArray(arr)){arr=[];setp(doc,q[2],arr)}
     var i=+q[3];if(i>=arr.length)needRender=true;while(arr.length<=i)arr.push({});
@@ -2847,6 +2884,8 @@ document.addEventListener('click',function(e){
   if(act==='menu'){document.documentElement.classList.toggle('menu-open');return}
   if(act==='msearch'){go('search');render('search2');return}
   if(act==='capsheet'){openSheet();return}
+  if(act==='rtopt'){ui.rtOpen=ui.rtOpen===a.dataset.t?null:a.dataset.t;render();return}
+  if(act==='recnum'){var rn=store.records[a.dataset.id];if(rn){var nn2=recNumber(rn.type,rn.project,a.dataset.id);rn.no=nn2.no;rn.seq=nn2.seq;save('records',a.dataset.id);render()}return}
   if(act==='undolast'){undoLast();return}
   if(act==='agadd'){var ta=document.querySelector('[data-agadd="'+a.dataset.key+'"]');agAdd(a.dataset.key,ta?ta.value:'');return}
   if(act==='newmeeting'){newMeeting(ui.id);return}
