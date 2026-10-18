@@ -783,6 +783,8 @@ li:hover > .aupdb,.aupdb:focus-visible{opacity:1}
 .undob:disabled{opacity:.4; cursor:default}
 #topbar .undob{margin-left:auto}
 #topbar .undob + button{margin-left:6px}
+.rich h3{font-size:1.02rem; font-weight:600; margin:10px 0 2px; font-family:var(--head)}
+.rich h3:first-child{margin-top:0}
 </style>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
 <script src="firebase-config.js"></script>
@@ -835,7 +837,7 @@ var CLOSEOUT=["All deliverables issued at final revision","Document register and
 var PRESITE=["Site induction current and PPE packed","Access, permits and escort arranged","Latest drawings and a list of questions ready","Camera or tablet charged","Know who you are meeting and their number","Someone knows where you are and when you will be back"];
 var MORECK=[{id:'onboard',name:'New starter onboarding',items:ONBOARD},{id:'presite',name:'Before a site visit',items:PRESITE},{id:'closeout',name:'Project close-out',items:CLOSEOUT}];
 var IFC=["Design criteria met and deviations approved in writing","Calculations checked and filed","Certified vendor data incorporated, or holds clearly marked","Interdisciplinary check complete and clashes resolved","HAZOP, safety in design and constructability actions closed","Drawings checked for dimensions, buildability, completeness and clarity","Signatures complete: designer, checker, discipline engineer, engineering manager, Project Manager","Client approval received and recorded"];
-var OPTREF={BDST:BDST,IMPST:IMPST,OUTCOME:[['',''],['proceed','Proceed'],['actions','Proceed with actions'],['again','Review again']]};
+var OPTREF={DIR:[['',''],['in','Incoming'],['out','Outgoing']],BDST:BDST,IMPST:IMPST,OUTCOME:[['',''],['proceed','Proceed'],['actions','Proceed with actions'],['again','Review again']]};
 function resolveOpts(o){if(o.optsRef)return OPTREF[o.optsRef]||[];if(o.choices)return [['','']].concat(o.choices.map(function(c){return [c,c]}));return typeof o.opts==='function'?o.opts():(o.opts||[])}
 var asItems=function(a){return a.map(function(t){return {t:t}})};
 
@@ -946,7 +948,8 @@ function addChecklists(){var st=single('settings');if(st.ckAdded>=2)return;var h
 function meetingAgendas(){Object.keys(store.records).forEach(function(id){var r=store.records[id];if(!r||r.type!=='meeting'||!r.d||Array.isArray(r.d.agenda))return;
   var ik=r.d.notes_ink,hasInk=!!(ik&&((ik.s&&ik.s.length)||ik.ref));if(ik&&ik._pending)return;if(!plain(r.d.notes||'').trim()&&!hasInk)return;
   var it={h:'',notes:r.d.notes||''};if(hasInk)it.notes_ink=ik;r.d.agenda=[it];delete r.d.notes;delete r.d.notes_ink;save('records',id,true)})}
-function migrate(){mergeLists();meetingAgendas();addChecklists();typeProjects();markOldFiled();moveChecks();Object.keys(store.records).forEach(function(id){var r=store.records[id];if(r&&'folder' in r){if(r.folder&&!r.project)r.project=internalProject(r.folder);delete r.folder;save('records',id,true)}});var dt=store.single.dash;if(dt&&Array.isArray(dt.top3)&&dt.top3.some(function(r){return r&&r.t})){dt.top3.forEach(function(r){if(r&&r.t)single('actions').list.push({t:r.t,pri:true,done:!!r.done,kind:''})});dt.top3=[];save('single','dash',true);save('single','actions',true)}Object.keys(store.projects).forEach(function(id){if(convSched(store.projects[id]))save('projects',id,true)});var d=store.single.dash;if(d&&Array.isArray(d.props)&&d.props.length){var bd=single('bd');
+function sketchOff(){var st=rtSet();if(st.sketchMerged)return;st.formOff.sketch=true;st.sketchMerged=1;save('single','settings',true)}
+function migrate(){mergeLists();sketchOff();meetingAgendas();addChecklists();typeProjects();markOldFiled();moveChecks();Object.keys(store.records).forEach(function(id){var r=store.records[id];if(r&&'folder' in r){if(r.folder&&!r.project)r.project=internalProject(r.folder);delete r.folder;save('records',id,true)}});var dt=store.single.dash;if(dt&&Array.isArray(dt.top3)&&dt.top3.some(function(r){return r&&r.t})){dt.top3.forEach(function(r){if(r&&r.t)single('actions').list.push({t:r.t,pri:true,done:!!r.done,kind:''})});dt.top3=[];save('single','dash',true);save('single','actions',true)}Object.keys(store.projects).forEach(function(id){if(convSched(store.projects[id]))save('projects',id,true)});var d=store.single.dash;if(d&&Array.isArray(d.props)&&d.props.length){var bd=single('bd');
     d.props.forEach(function(r){if(r&&r.t)bd.pipeline.push({opp:r.t})});delete d.props;save('single','dash',true);save('single','bd',true)}}
 function status(){var el=document.getElementById('status');if(!el)return;
   el.className=mode==='local'?'warn':'';
@@ -1052,7 +1055,7 @@ function removeFile(key){var p=key.split('|'),doc=store[p[0]][p[1]],arr=doc&&get
   toast('Removed '+f.name,function(){undone=true;var a2=get(store[p[0]][p[1]]||{},p[2]);if(a2){a2.splice(Math.min(i,a2.length),0,f);save(p[0],p[1]);render()}});
   setTimeout(function(){if(!undone&&as)as.delete(f.id).catch(function(){})},9000)}
 /* rich text: bold, italic, bullets only */
-var TAGS={B:1,STRONG:1,I:1,EM:1,U:1,UL:1,OL:1,LI:1,BR:1,DIV:1,P:1}, DROP={SCRIPT:1,STYLE:1,IFRAME:1,OBJECT:1,EMBED:1,TEMPLATE:1};
+var TAGS={B:1,STRONG:1,I:1,EM:1,U:1,UL:1,OL:1,LI:1,BR:1,DIV:1,P:1,H3:1}, DROP={SCRIPT:1,STYLE:1,IFRAME:1,OBJECT:1,EMBED:1,TEMPLATE:1};
 function cleanHtml(s){s=String(s||'');if(s.indexOf('<')<0)return esc(s).replace(/\n/g,'<br>');
   var t=document.createElement('template');t.innerHTML=s;
   (function walk(n){[].slice.call(n.childNodes).forEach(function(c){
@@ -1061,7 +1064,7 @@ function cleanHtml(s){s=String(s||'');if(s.indexOf('<')<0)return esc(s).replace(
     else if(c.nodeType!==3)n.removeChild(c)})})(t.content);
   return t.innerHTML}
 function rich(kind,id,path,label){var k=kind+'|'+id+'|'+path,ik=get(store[kind][id],path+'_ink'),open=inkOpen[k]==null?!!(ik&&ik.s&&ik.s.length):inkOpen[k];
-  return '<div class="rt" role="toolbar" aria-label="Formatting"><button data-rich="bold" aria-label="Bold"><b>B</b></button><button data-rich="italic" aria-label="Italic"><i>I</i></button><button data-rich="insertUnorderedList" aria-label="Bulleted list">List</button><button data-act="inktoggle" data-key="'+k+'" aria-pressed="'+open+'" title="Write by hand with a pencil, under the typed notes">Handwrite</button></div>'
+  return '<div class="rt" role="toolbar" aria-label="Formatting"><button data-rich="bold" aria-label="Bold"><b>B</b></button><button data-rich="italic" aria-label="Italic"><i>I</i></button><button data-rich="heading" aria-label="Heading" title="Heading">H</button><button data-rich="insertUnorderedList" aria-label="Bulleted list">List</button><button data-rich="insertOrderedList" aria-label="Numbered list" title="Numbered list">1.</button><button data-act="inktoggle" data-key="'+k+'" aria-pressed="'+open+'" title="Write by hand with a pencil, under the typed notes">Handwrite</button></div>'
     +'<div class="rich'+(open?' short':'')+'" contenteditable="true" role="textbox" aria-multiline="true" aria-label="'+esc(label)+'" data-r="'+k+'">'+cleanHtml(get(store[kind][id],path))+'</div>'+(open?inkPad(kind,id,path+'_ink',label,380):'')}
 
 /* ================= declarative page layouts (drive both the screen and the PDF) ================= */
@@ -1117,43 +1120,47 @@ var OFFICE=[L(null,T('items','Team and business actions',[{k:'done',type:'check'
   L(null,T('improve','Improvements',[{k:'t',label:'Idea or annoyance',w:'2fr'},{k:'area',label:'Area (standards, templates, tools)'},{k:'status',label:'Status',type:'select',optsRef:'IMPST',w:'118px'}],{wide:1})),
   L(null,R('notes','Notes',null,160))];
 /* dated records: the forms that get created and filed */
-var CKCOLS=[{k:'done',type:'check',w:'34px',label:'Done',rr:1},{k:'t',label:'Check',w:'2fr'},{k:'note',label:'Note'}];
+var CKCOLS=[{k:'done',type:'check',w:'34px',label:'Done',rr:1},{k:'t',label:'Check',w:'2fr'},{k:'na',type:'check',w:'40px',label:'N/A',rr:1},{k:'by',label:'By',w:'.45fr'},{k:'on',label:'Date',type:'date',w:'120px'},{k:'note',label:'Note'}];
 var RGROUPS=[['notes','Notes and meetings',['meeting','call','general','sketch']],['project','Projects and design',['pcheck','decision','brief','options','calc','review','proposal']],
-  ['site','Site',['site','siteday']],['people','People',['scheck','interview']]];
+  ['site','Site',['site','siteday']],['people','People',['scheck','interview','handover']]];
 var FORMS={
   meeting:{name:'Meeting notes',title:'Meeting',rows:[L(null,A('attendees','Attendees',2)),L(null,{kind:'agenda',k:'agenda',t:'Agenda and notes'}),L(null,ACTIONS()),L(null,FILES('Attachments'))]},
   general:{name:'General notes',title:'Subject',rows:[L(null,R('notes','Notes',null,360))]},
   sketch:{name:'Sketch notes',title:'Subject',link:'project',rows:[L(null,INK('sketch','Sketch',640)),L(null,R('notes','Notes',null,120))]},
   pcheck:{name:'Project check-in',title:'With',link:'project',rows:[L(null,A('summary','Summary',2,'Shows in the record list')),
-    L(null,KV('nums','Status',[['hours','Hours spent'],['budget','Budget'],['forecast','Forecast'],['progress','Progress %']])),L([1,1],A('done','Done',5),A('next','Next',5)),
-    L(null,A('issues','Issues and risks',4)),L([1,1],A('changes','Changes and holds',3),A('decisions','Decisions',3)),L(null,ACTIONS())]},
+    L(null,KV('nums','Status',[['hours','Hours spent'],['budget','Budget'],['forecast','Forecast'],['progress','Progress %']])),L([1,1],R('done','Done',null,90),R('next','Next',null,90)),
+    L(null,R('issues','Issues and risks',null,90)),L([1,1],R('changes','Changes and holds',null,90),R('decisions','Decisions',null,90)),L(null,ACTIONS())]},
   scheck:{name:'Staff check-in',title:'Topic',link:'person',rows:[L(null,A('summary','Summary',2,'Shows in the record list')),
-    L([1,1],A('wins','Wins',4),A('challenges','Challenges',4)),L(null,A('priorities','Priorities',3)),L([1,1],A('now','Workload now',3),A('look','Workload lookahead',3)),
-    L([1,1],A('support','Support and development',3),A('feedback','Feedback given and received',3)),L(null,ACTIONS())]},
-  brief:{name:'Design brief',title:'Subject',link:'project',rows:[L(null,A('objective','Objective',3)),L(null,A('scope','Scope and battery limits',4)),
-    L(null,T('data','Key data',[{k:'item',label:'Item'},{k:'value',label:'Value and source',w:'1.5fr'}])),L([1,1],A('assume','Assumptions',4),A('exclude','Exclusions',4)),
-    L(null,A('codes','Codes and standards',3)),L(null,TICKS('questions','Open questions'))]},
-  options:{name:'Options comparison',title:'Decision',link:'project',rows:[L(null,A('question','Question and context',3)),
+    L([1,1],R('wins','Wins',null,90),R('challenges','Challenges',null,90)),L(null,R('priorities','Priorities',null,90)),L([1,1],R('now','Workload now',null,90),R('look','Workload lookahead',null,90)),
+    L([1,1],R('support','Support and development',null,90),R('feedback','Feedback given and received',null,90)),L(null,ACTIONS())]},
+  brief:{name:'Design brief',title:'Subject',link:'project',rows:[L(null,R('objective','Objective',null,90)),L(null,R('scope','Scope and battery limits',null,90)),
+    L(null,T('data','Key data',[{k:'item',label:'Item'},{k:'value',label:'Value and source',w:'1.5fr'}])),L([1,1],R('assume','Assumptions',null,90),R('exclude','Exclusions',null,90)),
+    L(null,R('codes','Codes and standards',null,90)),L(null,TICKS('questions','Open questions'))]},
+  options:{name:'Options comparison',title:'Decision',link:'project',rows:[L(null,R('question','Question and context',null,90)),
     L(null,KV('names','Options or bidders',[['a','A'],['b','B'],['c','C'],['d','D']],'40px')),
     L(null,T('criteria','Criteria',[{k:'c',label:'Criteria',w:'1.6fr'},{k:'w',label:'Weight',w:'.5fr'},{k:'a',label:'A'},{k:'b',label:'B'},{k:'c2',label:'C'},{k:'d',label:'D'}],{wide:1,hint:'Use the last row for the score or rank'})),
-    L(null,A('preferred','Preferred option and why',3)),L(null,TICKS('questions','Open questions and next steps'))]},
-  calc:{name:'Calc sheet',title:'Subject',link:'project',rows:[L(null,KV('who','Record',[['no','Calc no.'],['by','By'],['chk','Checked by']])),L(null,A('basis','Basis: purpose, codes, inputs, assumptions',3)),L(null,INK('hand','Hand calculation',520)),
+    L(null,R('preferred','Preferred option and why',null,90)),L(null,TICKS('questions','Open questions and next steps'))]},
+  calc:{name:'Calc sheet',title:'Subject',link:'project',rows:[L(null,KV('who','Record',[['no','Calc no.'],['by','By'],['chk','Checked by']])),L(null,R('basis','Basis: purpose, codes, inputs, assumptions',null,90)),L(null,INK('hand','Hand calculation',520)),
     L(null,T('lines','Calculation',[{k:'ref',label:'Ref',w:'.4fr'},{k:'work',label:'Working',type:'area',w:'2fr'},{k:'result',label:'Result',w:'.7fr'}],{wide:1}))]},
   review:{name:'Design review record',title:'Review',link:'project',rows:[L(null,KV('info','Review',[['type','Review type'],['docs','Documents and revision'],['attendees','Attendees'],['outcome','Outcome','select','OUTCOME'],['chair','Chair']],'150px')),
     L(null,T('comments','Comments',[{k:'ref',label:'Ref (drawing, tag)',w:'.7fr'},{k:'comment',label:'Comment',type:'area',w:'2fr'},{k:'action',label:'Action or response',type:'area',w:'1.3fr'},{k:'who',label:'Who',w:'.5fr'},{k:'closed',label:'Closed',type:'check',w:'60px'}],{wide:1})),L(null,FILES('Marked-up drawings and files'))]},
   site:{name:'Site visit and inspection',title:'Location or vendor',link:'project',rows:[L(null,KV('info','Visit',[['purpose','Purpose'],['present','Present']])),
     L(null,T('obs','Observations',[{k:'t',label:'Observation',type:'area',w:'2.4fr'},{k:'photo',label:'Photo ref',w:'.6fr'}])),L(null,FILES('Photos and files')),L(null,R('notes','Notes',null,120)),L(null,ACTIONS('Punch items and actions'))]},
   checklist:{name:'Checklist',title:'Name',rows:[L(null,T('items','Checks',CKCOLS,{wide:1})),L(null,R('notes','Notes',null,120))]},
-  call:{name:'Phone call',title:'With',rows:[L(null,A('summary','Summary',2,'Shows in the record list')),L(null,R('notes','Notes',null,160)),L(null,ACTIONS())]},
-  decision:{name:'Decision record',title:'Decision',link:'project',rows:[L(null,A('summary','What was decided',2,'Shows in the record list')),L(null,A('context','Context and why a decision was needed',3)),
+  call:{name:'Phone call',title:'With',rows:[L(null,KV('info','Call',[['dir','Direction','select','DIR'],['due','Follow up by','date']])),L(null,A('summary','Summary',2,'Shows in the record list')),L(null,R('notes','Notes',null,160)),L(null,ACTIONS())]},
+  decision:{name:'Decision record',title:'Decision',link:'project',rows:[L(null,A('summary','What was decided',2,'Shows in the record list')),L(null,R('context','Context and why a decision was needed',null,90)),
     L(null,T('opts','Options considered',[{k:'opt',label:'Option',w:'1.2fr'},{k:'pro',label:'For',type:'area',w:'1.4fr'},{k:'con',label:'Against',type:'area',w:'1.4fr'}],{wide:1})),
-    L([1.3,1],A('why','Why this option',3),KV('who','Sign-off',[['by','Decided by'],['with','Consulted'],['review','Review by','date']])),L(null,ACTIONS())]},
+    L([1.3,1],R('why','Why this option',null,90),KV('who','Sign-off',[['by','Decided by'],['with','Consulted'],['review','Review by','date']])),L(null,ACTIONS())]},
   siteday:{name:'Site diary',title:'Day',link:'project',rows:[L(null,KV('cond','Conditions',[['weather','Weather'],['ground','Ground conditions'],['hours','Hours worked']])),
     L(null,T('onsite','On site',[{k:'crew',label:'Contractor or crew',w:'1.3fr'},{k:'n',label:'Headcount',type:'num',w:'.5fr'},{k:'work',label:'Work done',type:'area',w:'2fr'}],{wide:1})),
-    L(null,A('issues','Issues, delays, visitors and instructions',3)),L(null,FILES('Photos')),L(null,ACTIONS())]},
+    L(null,R('issues','Issues, delays, visitors and instructions',null,90)),L(null,FILES('Photos')),L(null,ACTIONS())]},
   interview:{name:'Interview notes',title:'Candidate',rows:[L(null,KV('info','Interview',[['role','Role'],['panel','Panel'],['source','How they applied']])),
     L(null,T('qs','Questions',[{k:'q',label:'Question',w:'1.2fr'},{k:'a',label:'Answer and evidence',type:'area',w:'2fr'},{k:'score',label:'Score',w:'.45fr'}],{wide:1})),
     L([1,1],A('strengths','Strengths',3),A('concerns','Concerns',3)),L(null,A('summary','Recommendation',2,'Shows in the record list'))]},
+  handover:{name:'Handover note',title:'Handing over',rows:[L(null,KV('info','Handover',[['from','From'],['to','To'],['away','Away from','date'],['back','Back on','date']])),
+    L(null,ACTIONS('Open items to hand over')),L(null,T('coming','Coming up',[{k:'t',label:'What',w:'2fr'},{k:'due',label:'Due',type:'date',w:'132px'},{k:'note',label:'Notes',w:'1.4fr'}],{wide:1})),
+    L(null,T('contacts','Key contacts',[{k:'name',label:'Name'},{k:'role',label:'Role or company'},{k:'contact',label:'Phone or email'}],{wide:1})),
+    L(null,R('where','Where things are: files, folders, logins',null,90)),L(null,R('notes','Anything else',null,90))]},
   proposal:{name:'Proposal notes',title:'Opportunity',rows:[L(null,KV('info','Opportunity',[['client','Client'],['contact','Contact'],['phase','Phase or type'],['due','Due','date']])),L(null,A('scope','Scope summary',3)),
     L(null,T('deliv','Deliverables and hours',[{k:'t',label:'Deliverable',w:'2fr'},{k:'qty',label:'Qty',type:'num',w:'.4fr'},{k:'eng',label:'Engineering hrs',type:'num',w:'.6fr'},{k:'dft',label:'Drafting hrs',type:'num',w:'.6fr'},{k:'tot',label:'Total hrs',type:'num',w:'.6fr'}],{wide:1})),
     L([1,1],A('clar','Clarifications',4),A('excl','Exclusions',4)),L(null,A('risks','Risks and unknowns',3)),L(null,TICKS('next','Next steps'))]}
@@ -1169,7 +1176,9 @@ function layouts(){var S=single('layouts');if(!S.L||typeof S.L!=='object')S.L={}
 function pages(scope){return layouts().pages.filter(function(p){return !scope||p.scope===scope})}
 var RETITLE={'Done this week':'Completed this week','Proposal scratch':'Proposal notes'};
 var DROPHINT={'Links to key documents, folders and systems':1,'Staff check-in records are listed under Records':1,'What the project is, who the client is, where the full execution plan lives':1,'A line per area or facility':1,'Project, commodity and discipline terms':1,'Relationships, leads, things to follow':1,'Admin, training, recruitment, anything not tied to a project':1,'Including follow-ups, reminders and requests':1,'Including follow-ups, reminders and changes':1,'Tick when you have checked in':1};
+var RICHK={"brief": ["objective", "scope", "assume", "exclude", "codes"], "options": ["question", "preferred"], "calc": ["basis"], "scheck": ["wins", "challenges", "priorities", "now", "look", "support", "feedback"], "pcheck": ["done", "next", "issues", "changes", "decisions"], "siteday": ["issues"], "decision": ["context", "why"]};
 function getLayout(lid){var own=layouts().L[lid];
+  if(own&&own.rows&&lid.indexOf('f_')===0&&RICHK[lid.slice(2)]){var rk=RICHK[lid.slice(2)];own.rows.forEach(function(r){r.cols.forEach(function(c){c.b=c.b.map(function(x){if(x.kind==='area'&&rk.indexOf(x.k)>=0){var y={kind:'rich',k:x.k,t:x.t,minh:90};if(x.hint)y.hint=x.hint;if(x.hidden)y.hidden=x.hidden;return y}return x})})})}
   if(lid==='dash'&&own&&own.rows)own.rows.forEach(function(r){r.cols.forEach(function(c){c.b=c.b.map(function(x){return x.k==='top3'?SP('prio','Priorities'):x})})});
   if(lid==='sheet'&&own&&own.rows)own.rows.forEach(function(r){r.cols.forEach(function(c){c.b.forEach(function(x){if(x.k==='sched'&&x.kind==='table'){x.kind='gantt';delete x.cols;delete x.weeks;delete x.cls;delete x.wide;delete x.hint}})})});
   if(own&&own.rows)own.rows.forEach(function(r){r.cols.forEach(function(c){c.b.forEach(function(x){if(x.hint&&DROPHINT[x.hint])delete x.hint;if(RETITLE[x.t])x.t=RETITLE[x.t]})})});
@@ -1216,7 +1225,7 @@ function newMeeting(pid){var last=Object.keys(store.records).map(function(id){re
 function newRecord(type,project,person){var r={type:type,title:'',date:today(),project:project||'',person:person||'',ts:Date.now(),d:{}};
   if(type.indexOf('checklist:')===0){var t=templates()[+type.slice(10)];r.type='checklist';if(t){r.title=t.name||'';r.d.items=fromTemplate(t).items}}
   return put('records',newId(),r)}
-function ckCount(r){var it=(r&&r.d&&r.d.items||[]).filter(function(i){return i&&i.t});return {n:it.length,d:it.filter(function(i){return i.done}).length}}
+function ckCount(r){var it=(r&&r.d&&r.d.items||[]).filter(function(i){return i&&i.t});return {n:it.length,d:it.filter(function(i){return i.done||i.na}).length}}
 function recSummary(r){if(r.type==='checklist'){var c=ckCount(r);return c.n?(c.d===c.n?'Complete, ':'')+c.d+' of '+c.n+' done':''}return (r.d||{}).summary||''}
 /* project types: each has its own header fields, tabs and (optionally) its own sheet layout. Kept in Settings, so they sync. */
 var PT_DEFAULT=[{id:'client',name:'Client job',internal:false,fields:{client:true,phase:true,status:true},offTabs:{},own:''},
@@ -1432,6 +1441,7 @@ function dated(){var out=[];
   sorted('people').forEach(function(x){(x.d.plan||[]).forEach(function(r){if(r.by&&!r.done)out.push({d:r.by,t:(r.goal||'Development goal')+' ('+(x.d.name||'person')+')',go:{v:'person',id:x.id}})});
     if(x.d.reg&&x.d.reg.next)out.push({d:x.d.reg.next,t:'Plan review ('+(x.d.name||'person')+')',go:{v:'person',id:x.id}})});
   allActions().forEach(function(a){if(a.due&&!a.done)out.push({d:a.due,t:a.t,go:a.go||{v:'actions'},bind:a.bind,who:a.who,dueBind:a.dueBind,kind:a.kind})});
+  Object.keys(store.records).forEach(function(rid){var r=store.records[rid],inf=r&&r.d&&r.d.info;if(r&&r.type==='call'&&inf&&inf.due)out.push({d:inf.due,t:'Follow up: '+(r.title||'phone call'),go:{v:'record',id:rid}})});
   (single('bd').pipeline||[]).forEach(function(r){if(r.due&&r.status!=='won'&&r.status!=='lost')out.push({d:r.due,t:'BD: '+(r.opp||'opportunity'),go:{v:'bd'}})});
   return out.sort(function(a,b){return a.d<b.d?-1:a.d>b.d?1:0})}
 function keyDates(){var out=[],t=today();(single('dash').keydates||[]).forEach(function(x,i){if(x&&x.d&&x.t)out.push({d:x.d,t:x.t,kind:'kd',i:i})});
@@ -2138,11 +2148,12 @@ function currentModel(){var v=ui.v,d,nm;
 function recordsModel(filter){var recs=Object.keys(store.records).map(function(id){return store.records[id]}).filter(filter).sort(function(a,b){return (a.date||'')<(b.date||'')?1:-1});
   return {t:'Records',kind:'table',cols:[{label:'Date',w:.6},{label:'Form',w:.9},{label:'Title',w:1.2},{label:'Summary',w:2}],rows:recs.map(function(r){return [fmtL(r.date),formDef(r.type).name,r.title||'',recSummary(r)]})}}
 function richBlocks(html){var t=document.createElement('template');t.innerHTML=cleanHtml(html);var blocks=[],cur=null;
-  function nb(bullet){cur={bullet:bullet,runs:[]};blocks.push(cur)}
+  function nb(bullet,num,head){cur={bullet:bullet,num:num||0,head:!!head,runs:[]};blocks.push(cur)}
   (function walk(n,b,i){[].forEach.call(n.childNodes,function(c){
     if(c.nodeType===3){if(c.nodeValue){if(!cur)nb(false);cur.runs.push({t:c.nodeValue.replace(/\u00a0/g,' '),b:b,i:i})}return}
     var tag=c.tagName;if(tag==='BR'){if(!cur)nb(false);cur=null;return}
-    if(tag==='LI'){nb(true);walk(c,b,i);cur=null;return}
+    if(tag==='LI'){var ol=c.parentNode&&c.parentNode.tagName==='OL',num=0;if(ol){num=1;var sb=c.previousElementSibling;while(sb){if(sb.tagName==='LI')num++;sb=sb.previousElementSibling}}nb(!ol,num);walk(c,b,i);cur=null;return}
+    if(tag==='H3'){nb(false,0,true);walk(c,true,i);cur=null;return}
     if(tag==='DIV'||tag==='P'){cur=null;walk(c,b,i);cur=null;return}
     walk(c,b||tag==='B'||tag==='STRONG',i||tag==='I'||tag==='EM')})})(t.content,false,false);
   while(blocks.length&&!blocks[blocks.length-1].runs.length)blocks.pop();return blocks}
@@ -2168,8 +2179,8 @@ function makePdf(m){
   function items(b,w){var out=[],inner=w-16;
     if(b.kind==='text'){var ls=wrap(b.text,inner);while(ls.length<2)ls.push('');ls.forEach(function(l){out.push({h:LH,draw:function(x,yy){font();doc.text(l,x+8,yy+8.5)}})});out.push({h:5,draw:function(){}})}
     else if(b.kind==='rich'){var blocks=richBlocks(b.html),n=0;
-      blocks.forEach(function(bl){var ind=bl.bullet?10:0,maxw=inner-ind,line=[],lw=0,first=true;
-        var emit=function(){var seg=line.slice(),fl=first;out.push({h:LH,draw:function(x,yy){var cx=x+8+ind;if(bl.bullet&&fl){font();doc.text('\u2022',x+8,yy+8.5)}
+      blocks.forEach(function(bl){var ind=bl.bullet||bl.num?12:0,maxw=inner-ind,line=[],lw=0,first=true;if(bl.head){bl.runs.forEach(function(r){r.b=true});if(n)out.push({h:3,draw:function(){}})}
+        var emit=function(){var seg=line.slice(),fl=first;out.push({h:LH,draw:function(x,yy){var cx=x+8+ind;if(bl.bullet&&fl){font();doc.text('\u2022',x+8,yy+8.5)}if(bl.num&&fl){font();doc.text(bl.num+'.',x+8,yy+8.5)}
             seg.forEach(function(s){font(s.b,s.i);doc.text(s.t,cx,yy+8.5);cx+=s.w})}});n++;line=[];lw=0;first=false};
         bl.runs.forEach(function(r){font(r.b,r.i);r.t.split(/(\s+)/).forEach(function(tok){if(!tok)return;var tw=doc.getTextWidth(tok);
           if(lw+tw>maxw&&line.length&&tok.trim()){emit()}if(!line.length&&!tok.trim())return;line.push({t:tok,b:r.b,i:r.i,w:tw});lw+=tw})});
@@ -2265,7 +2276,7 @@ function makeDocx(m){var D=window.docx,F='Arial',INK='111111',MID='6B6B6B',RED='
     if(b.kind==='part'){body.push(P(R(b.t||'',{b:true,size:30}),{before:400,after:60,keepNext:true}));return}
     body.push(head(b.t||''));
     if(b.kind==='text'){String(b.text||'').split('\n').forEach(function(l){body.push(P(R(l)))})}
-    else if(b.kind==='rich'){var bl=richBlocks(b.html||'');bl.forEach(function(x){body.push(P(x.runs.length?x.runs.map(function(q){return R(q.t,{b:q.b,i:q.i})}):[R('')],{bullet:x.bullet}))});
+    else if(b.kind==='rich'){var bl=richBlocks(b.html||'');bl.forEach(function(x){var runs=x.runs.length?x.runs.map(function(q){return R(q.t,{b:q.b||x.head,i:q.i,size:x.head?22:undefined})}):[R('')];if(x.num)runs.unshift(R(x.num+'.  '));body.push(P(runs,{bullet:x.bullet,before:x.head?120:0,keepNext:x.head}))});
       if(hasInk(b.ink)){var pi=inkPng(b.ink);if(pi)body.push(P(img(pi.data,pi.w,pi.h,land?900:620)))}if(!bl.length&&!hasInk(b.ink))body.push(P(R('')))}
     else if(b.kind==='ink'){if(hasInk(b.ink)){var pk=inkPng(b.ink);if(pk)body.push(P(img(pk.data,pk.w,pk.h,land?900:620)))}String(b.text||'').split('\n').forEach(function(l){if(l)body.push(P(R(l)))})}
     else if(b.kind==='kv')body.push(tbl([{label:'',w:.42},{label:'',w:1}],(b.items||[]).map(function(it){return [[{t:it[0],s:'sub'}],it[1]]})));
@@ -2689,7 +2700,7 @@ document.addEventListener('pointerup',function(e){gDrop(e,false)});
 document.addEventListener('pointercancel',function(e){gDrop(e,true)});
 /* quick date chips on any Due field: Today, Tomorrow, Friday, Next Mon, In a week, Clear. On touch screens they appear instead of the date wheel, with "Pick a date" to open it. */
 var dcEl=null,dcFor=null;
-function isDue(el){var k=el&&el.dataset&&(el.dataset.l||el.dataset.b)||'';return el&&el.type==='date'&&/\|due$/.test(k)}
+function isDue(el){var k=el&&el.dataset&&(el.dataset.l||el.dataset.b)||'';return el&&el.type==='date'&&/[|.]due$/.test(k)}
 function dcClose(){if(dcEl){dcEl.remove();dcEl=null;dcFor=null}}
 function dcOpen(el){dcClose();var t=today(),dow=at(t).getDay(),fri=addDays(t,(5-dow+7)%7),mon=addDays(t,((8-dow)%7)||7);
   var C=[['Today',t],['Tomorrow',addDays(t,1)],[fri===t?'Today (Fri)':'Friday',fri],['Next Mon',mon],['In a week',addDays(t,7)]];
@@ -2766,7 +2777,7 @@ document.addEventListener('click',function(e){
   var it=x.closest('[data-inkt]');if(it){inkUI.tool=it.dataset.inkt;if(inkUI.tool!=='select'&&inkSel){var sk=inkSel.key;inkSel=null;sizeKey(sk)}inkBars();return}
   var ic=x.closest('[data-inkc]');if(ic){inkUI.color=+ic.dataset.inkc;if(inkUI.tool==='erase'||inkUI.tool==='select')inkUI.tool='pen';inkBars();return}
   var ia=x.closest('[data-inka]');if(ia){inkAct(ia.dataset.inka,ia.dataset.key,ia);return}
-  var rb=x.closest('[data-rich]');if(rb){var ed=rb.parentNode.nextElementSibling;if(ed){ed.focus();try{document.execCommand(rb.dataset.rich,false,null)}catch(err){}ed.dispatchEvent(new Event('input',{bubbles:true}))}return}
+  var rb=x.closest('[data-rich]');if(rb){var ed=rb.parentNode.nextElementSibling;if(ed){ed.focus();try{if(rb.dataset.rich==='heading'){var cur=String(document.queryCommandValue('formatBlock')||'').toLowerCase();document.execCommand('formatBlock',false,cur==='h3'?'div':'h3')}else document.execCommand(rb.dataset.rich,false,null)}catch(err){}ed.dispatchEvent(new Event('input',{bubbles:true}))}return}
   var rw=x.closest('[data-row]');if(rw){var q=rw.dataset.row.split('|'),doc=store[q[0]][q[1]],arr=doc&&get(doc,q[2]),i=+q[3];if(!arr)return;
     if(q[4]==='del'){var gone1=arr.splice(i,1)[0];toast('Row deleted',function(){var a2=get(store[q[0]][q[1]]||{},q[2]);if(a2){a2.splice(Math.min(i,a2.length),0,gone1);save(q[0],q[1]);render()}})}
     else{var j=q[4]==='up'?i-1:i+1;if(j<0||j>=arr.length)return;var t=arr[i];arr[i]=arr[j];arr[j]=t}
