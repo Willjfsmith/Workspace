@@ -747,6 +747,11 @@ li:hover > .aupdb,.aupdb:focus-visible{opacity:1}
 .fspage .inkbar{top:var(--inktop,0px)}
 .inkchips{position:sticky; top:calc(var(--inktop,0px) + 4px); float:right; height:0; margin-right:6px; overflow:visible; z-index:4}
 .inkchips .inkchip{margin-top:4px}
+.fileto{align-items:center}
+.fileto .sp{flex:1}
+.eb.pri{background:var(--ink); color:var(--sheet); border-color:var(--ink); font-weight:600}
+.ibmeta,.inbox .ibmeta{grid-template-columns:minmax(0,1.4fr) minmax(0,.8fr) minmax(0,118px) !important}
+.ibmeta > *:last-child{grid-column:auto !important; border-left:1px solid var(--rule) !important; border-top:0 !important}
 </style>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
 <script src="firebase-config.js"></script>
@@ -1520,11 +1525,18 @@ function mergeLists(){var d=store.single.dash;if(!d)return;var L=single('actions
   if(moved){save('single','dash',true);save('single','actions',true);toast('Follow-ups, reminders and requests are now in Actions')}}
 var FILETO=[['action','Action'],['note','Notes'],['change','Change'],['follow','Follow-up'],['rem','Reminder'],['bd','BD'],['office','Team'],['bin','Delete']];
 var IBP=function(){return projGroups('No project')};
+function shortName(n){n=String(n||'project');return n.length>18?n.slice(0,17)+'\u2026':n}
+function fileAll(){var it=inboxItems(),L=single('actions').list,keep=[],moved=[],added=[];
+  it.forEach(function(x){if(x&&x.p&&store.projects[x.p]&&String(x.t||'').trim()){var row={t:x.t,kind:'',project:x.p,who:x.who||'',due:x.due||''};L.push(row);added.push(row);moved.push(x)}else keep.push(x)});
+  if(!moved.length)return;var before=it.slice();it.length=0;keep.forEach(function(x){it.push(x)});save('single','inbox');save('single','actions');render();
+  toast('Filed '+moved.length+(moved.length===1?' item':' items')+' as actions on their projects',function(){added.forEach(function(r){var j=L.indexOf(r);if(j>=0)L.splice(j,1)});it.length=0;before.forEach(function(x){it.push(x)});save('single','inbox');save('single','actions');render()})}
 function inboxHtml(){var it=inboxItems();if(!it.length)return '<p class="empty">Your inbox is empty.</p>';
   return '<ul class="list inbox">'+it.map(function(x,i){var p=store.projects[x.p];
     return '<li><div class="ibt">'+cell('single','inbox','items',i,{k:'t',label:'Item',type:'area'},x)+'</div>'
       +'<div class="ibmeta">'+cell('single','inbox','items',i,{k:'p',label:'Project',type:'select',opts:IBP,rr:1},x)+cell('single','inbox','items',i,{k:'who',label:'Who',type:'who',ph:'Who'},x)+cell('single','inbox','items',i,{k:'due',label:'Due',type:'date'},x)+'</div>'
-      +'<span class="fileto" role="group" aria-label="File this as">'+FILETO.filter(function(f){return ui.ibOpen===i||/^(action|note|change|bin)$/.test(f[0])}).map(function(f){return '<button class="eb'+(f[0]==='bin'?' quiet':'')+'" data-fileto="'+i+'|'+f[0]+'">'+(f[0]==='change'?(p?'Change log':'Request'):f[1])+'</button>'}).join('')+(ui.ibOpen===i?'':'<button class="eb quiet" data-ibm="'+i+'">More</button>')+'</span></li>'}).join('')+'</ul>'}
+      +'<span class="fileto" role="group" aria-label="File this as"><button class="eb pri" data-fileto="'+i+'|action" title="File it as an action'+(p?' on '+esc(p.name||'the project'):'')+', with its Who and Due">'+(p?'File':'File as action')+'</button>'
+        +FILETO.filter(function(f){return f[0]!=='action'&&f[0]!=='bin'&&(ui.ibOpen===i||/^(note|change)$/.test(f[0]))}).map(function(f){return '<button class="eb" data-fileto="'+i+'|'+f[0]+'">'+(f[0]==='change'?(p?'Change log':'Request'):f[1])+'</button>'}).join('')
+        +(ui.ibOpen===i?'':'<button class="eb quiet" data-ibm="'+i+'">More</button>')+'<span class="sp"></span><button class="eb quiet" data-fileto="'+i+'|bin">Delete</button></span></li>'}).join('')+'</ul>'}
 function fileTo(i,where){var it=inboxItems(),x=it[i];if(!x||!String(x.t||'').trim()){if(x&&where==='bin'){it.splice(i,1);save('single','inbox');render()}return}var p=store.projects[x.p],pre=p?(p.name||'Project')+': ':'',msg,dd;
   if(where==='action'||where==='follow'||where==='rem'||(where==='change'&&!p)){single('actions').list.push({t:x.t,kind:where==='action'?'':where,project:x.p||'',who:x.who||'',due:x.due||''});save('single','actions');
     msg=(where==='action'?'Filed as an action':'Filed in Actions as a '+KINDN[where==='change'?'change':where].toLowerCase())+(p?' on '+(p.name||'the project'):'')}
@@ -1730,7 +1742,7 @@ V.dump=function(){var mon=isDate(ui.id)?mondayOf(ui.id):mondayOf(),wk='w'+mon,w=
   return stepHead('Friday review',mon,DSTEPS,st)+b+stepNav(st,DSTEPS.length,'Complete the review')};
 
 /* ---- lists for the bottom bar ---- */
-V.inbox=function(){var n=inboxItems().length+unfiled().length;return '<div class="dayhead"><div class="dh"><span class="dow">'+(n?n+' to file':'All filed')+'</span><h1>Inbox</h1></div></div>'+capForm('cap|inbox')+unfiledHtml()+'<div class="g">'+box('Items to file',inboxHtml(),'')+'</div>'};
+V.inbox=function(){var n=inboxItems().length+unfiled().length;return '<div class="dayhead"><div class="dh"><span class="dow">'+(n?n+' to file':'All filed')+'</span><h1>Inbox</h1></div></div>'+capForm('cap|inbox')+unfiledHtml()+'<div class="g">'+box('Items to file',inboxHtml(),'',(function(){var n=inboxItems().filter(function(x){return x&&x.p&&store.projects[x.p]&&String(x.t||'').trim()}).length;return n>1?'<button class="mini" data-act="fileall">File all '+n+' with a project</button>':''})())+'</div>'};
 V.projects=function(){var sp=projSplit(),ar=sorted('projects',true).length;
   var card=function(x){var st=x.d.status,ru=rollup(x.id),sn=st?STATUS.filter(function(s){return s[0]===st})[0][1]:'';
       return '<button class="pcard" data-go="project" data-id="'+x.id+'"><span class="pn">'+mark(st)+' '+esc(x.d.name||'Untitled project')+'</span><span class="k">'+esc([x.d.client,x.d.phase,sn].filter(Boolean).join(', '))+'</span>'
@@ -2713,6 +2725,7 @@ document.addEventListener('click',function(e){
   if(act==='menu'){document.documentElement.classList.toggle('menu-open');return}
   if(act==='msearch'){go('search');render('search2');return}
   if(act==='capsheet'){openSheet();return}
+  if(act==='fileall'){fileAll();return}
   if(act==='reloadapp'){location.reload();return}
   if(act==='verlater'){var vb=document.getElementById('verbar');if(vb)vb.remove();return}
   if(act==='notes2rec'){var np=a.dataset.p,dd=single('dash'),nh=dd[np]||'',nk=dd[np+'_ink'],hasInk=!!(nk&&nk.s&&nk.s.length);
