@@ -741,6 +741,12 @@ li:hover > .aupdb,.aupdb:focus-visible{opacity:1}
 .rtl .rtgh{font-size:.72rem; font-weight:600; letter-spacing:.03em; text-transform:uppercase; color:var(--muted); padding:10px 9px 3px; background:var(--rail)}
 .rtl .rtgh:first-child{padding-top:6px}
 #verbar{position:fixed; left:50%; transform:translateX(-50%); top:calc(10px + env(safe-area-inset-top,0px)); z-index:60; display:flex; gap:10px; align-items:center; background:var(--sheet); border:1px solid var(--ink); border-radius:4px; padding:8px 10px 8px 14px; box-shadow:0 8px 24px rgba(0,0,0,.18); font-size:.88rem; max-width:calc(100vw - 24px)}
+/* ---- handwriting tools stay in view on tall pages ---- */
+@supports (overflow:clip){.box,.fspage{overflow:clip}}
+.inkbar{position:sticky; top:var(--inktop,0px); z-index:4; background:var(--sheet)}
+.fspage .inkbar{top:var(--inktop,0px)}
+.inkchips{position:sticky; top:calc(var(--inktop,0px) + 4px); float:right; height:0; margin-right:6px; overflow:visible; z-index:4}
+.inkchips .inkchip{margin-top:4px}
 </style>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
 <script src="firebase-config.js"></script>
@@ -2312,7 +2318,10 @@ function sizeInk(cv){var d=inkData(cv.dataset.ink),h=(d&&d.h)||+cv.dataset.h||42
   var cw=Math.round(w*dpr),ch=Math.round(h*w/1000*dpr);if(cv.width!==cw||cv.height!==ch){cv.style.height=Math.round(h*w/1000)+'px';cv.width=cw;cv.height=ch}
   cv._sc=w/1000*dpr;cv._dpr=dpr;cv._h=h;drawInk(cv)}
 function sizeKey(key){document.querySelectorAll('canvas.ink').forEach(function(c){if(c.dataset.ink===key)sizeInk(c)})}
-function initInk(){document.querySelectorAll('canvas.ink').forEach(function(cv){if(inkCur&&inkCur.key===cv.dataset.ink&&!document.body.contains(inkCur.cv))inkCur.cv=cv;sizeInk(cv)})}
+function inkTop(){try{var tb=document.getElementById('topbar'),cs=tb&&getComputedStyle(tb),h=cs&&cs.display!=='none'&&cs.position==='sticky'?tb.offsetHeight:0;document.documentElement.style.setProperty('--inktop',h+'px');
+  var fs=document.getElementById('inkfs'),fb=fs&&fs.querySelector('.fsbar');if(fs&&fb&&fs.classList.contains('on'))fs.style.setProperty('--inktop',fb.offsetHeight+'px')}catch(e){}}
+window.addEventListener('resize',inkTop);
+function initInk(){inkTop();document.querySelectorAll('canvas.ink').forEach(function(cv){if(inkCur&&inkCur.key===cv.dataset.ink&&!document.body.contains(inkCur.cv))inkCur.cv=cv;sizeInk(cv)})}
 function inkBars(){document.querySelectorAll('[data-inkt]').forEach(function(b){b.setAttribute('aria-pressed',b.dataset.inkt===inkUI.tool)});
   document.querySelectorAll('[data-inkc]').forEach(function(b){b.setAttribute('aria-pressed',+b.dataset.inkc===inkUI.color)});
   document.querySelectorAll('[data-inka="finger"]').forEach(function(b){b.setAttribute('aria-pressed',inkUI.finger)});
