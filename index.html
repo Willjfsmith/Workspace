@@ -822,6 +822,21 @@ li:hover > .aupdb,.aupdb:focus-visible{opacity:1}
 .phadd input{position:absolute; inset:0; opacity:0; cursor:pointer}
 .regexp{display:inline-flex; gap:4px}
 @media (max-width:700px){.regi{padding:8px} .phb img,.phadd{height:72px}}
+#recpop{position:fixed; right:16px; bottom:0; z-index:25; display:none; flex-direction:row-reverse; align-items:flex-end; gap:10px; pointer-events:none; max-width:calc(100vw - 32px)}
+#recpop.on{display:flex}
+#recpop>*{pointer-events:auto}
+.popwin{width:min(680px,48vw); height:min(84vh,980px); display:flex; flex-direction:column; background:var(--board); border:1px solid var(--line); border-bottom:0; border-radius:8px 8px 0 0; box-shadow:0 8px 32px rgba(0,0,0,.22); overflow:hidden}
+.pophead,.popchip{display:flex; align-items:center; gap:2px; background:var(--ink); color:var(--board); padding:4px 6px 4px 12px; flex:none}
+.popchip{width:240px; border-radius:8px 8px 0 0; box-shadow:0 4px 18px rgba(0,0,0,.2)}
+.poptitle{flex:1; min-width:0; text-align:left; background:none; border:0; color:inherit; font:inherit; font-weight:600; font-size:.88rem; cursor:pointer; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; padding:4px 0}
+.poptitle span{font-weight:400; opacity:.7; margin-left:8px; font-size:.78rem}
+.popb{background:none; border:0; color:inherit; font-size:1.05rem; line-height:1; width:30px; height:28px; border-radius:4px; cursor:pointer}
+.popb:hover,.poptitle:hover{background:rgba(255,255,255,.14)}
+.popbody{flex:1; overflow:auto; padding:10px 14px 24px; overscroll-behavior:contain}
+.popbody .g{margin-top:10px}
+.popbody .hf{grid-template-columns:repeat(3,minmax(0,1fr)) !important}
+.popbody .hf label:nth-child(-n+2){grid-column:span 1}
+@media print{#recpop{display:none !important}}
 </style>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
 <script src="firebase-config.js"></script>
@@ -875,7 +890,7 @@ var PRESITE=["Site induction current and PPE packed","Access, permits and escort
 var MORECK=[{id:'onboard',name:'New starter onboarding',items:ONBOARD},{id:'presite',name:'Before a site visit',items:PRESITE},{id:'closeout',name:'Project close-out',items:CLOSEOUT}];
 var IFC=["Design criteria met and deviations approved in writing","Calculations checked and filed","Certified vendor data incorporated, or holds clearly marked","Interdisciplinary check complete and clashes resolved","HAZOP, safety in design and constructability actions closed","Drawings checked for dimensions, buildability, completeness and clarity","Signatures complete: designer, checker, discipline engineer, engineering manager, Project Manager","Client approval received and recorded"];
 var OPTREF={CHKST:[['',''],['unchecked','Unchecked'],['checked','Checked'],['super','Superseded']],
-  MEETINGS:function(){var cur=ui.v==='record'&&store.records[ui.id],mine=cur&&cur.d&&cur.d.who&&cur.d.who.made;return [['','']].concat(Object.keys(store.records).filter(function(id){var m=store.records[id];return m&&m.type==='meeting'&&(id===mine||!cur||!cur.project||m.project===cur.project)})
+  MEETINGS:function(){var cid=recCtx||(ui.v==='record'?ui.id:null),cur=cid&&store.records[cid],mine=cur&&cur.d&&cur.d.who&&cur.d.who.made;return [['','']].concat(Object.keys(store.records).filter(function(id){var m=store.records[id];return m&&m.type==='meeting'&&(id===mine||!cur||!cur.project||m.project===cur.project)})
     .sort(function(a,b){return (store.records[b].date||'').localeCompare(store.records[a].date||'')}).map(function(id){var m=store.records[id];return [id,(m.no?m.no+'  ':'')+fmtD(m.date)+'  '+(m.title||'Meeting')]}))},
   DIR:[['',''],['in','Incoming'],['out','Outgoing']],BDST:BDST,IMPST:IMPST,OUTCOME:[['',''],['proceed','Proceed'],['actions','Proceed with actions'],['again','Review again']]};
 function resolveOpts(o){if(o.optsRef){var rf=OPTREF[o.optsRef];return typeof rf==='function'?rf():(rf||[])}if(o.choices)return [['','']].concat(o.choices.map(function(c){return [c,c]}));return typeof o.opts==='function'?o.opts():(o.opts||[])}
@@ -2190,12 +2205,13 @@ V.records=function(){
 V.record=function(){
   var id=ui.id,r=store.records[id];if(!r){ui.v='records';return V.records()}
   var F=formDef(r.type);if(ui.edit&&F.lid)return '<div class="head"><h1>'+esc(F.name)+'</h1></div>'+editor(F.lid);
-  return '<div class="head"><h1>'+esc(F.name)+'</h1><span class="sp"></span>'+updated(r)+pdfBtn+(F.lid?editBtn(F.lid):'')+'<button class="btn danger" data-act="del" data-kind="records">'+(ui.confirm==='del'?'Confirm delete':'Delete')+'</button></div>'
-    +hfields('records',id,(function(){var c=rtConf(r.type),H=[];if(c.num||r.no)H.push(['no','No.',.55]);H.push(['title',F.title,1.6],['date','Date',.8,'date'],['project','Project',1,'select',projOpts],['person','Person',1,'select',peopleOpts]);
+  return '<div class="head"><h1>'+esc(F.name)+'</h1><span class="sp"></span>'+updated(r)+pdfBtn+(F.lid?editBtn(F.lid):'')+'<button class="btn danger" data-act="del" data-kind="records">'+(ui.confirm==='del'?'Confirm delete':'Delete')+'</button></div>'+recBody(id)};
+var recCtx=null;
+function recBody(id){var r=store.records[id],F=formDef(r.type),out;recCtx=id;
+  try{out=hfields('records',id,(function(){var c=rtConf(r.type),H=[];if(c.num||r.no)H.push(['no','No.',.55]);H.push(['title',F.title,1.6],['date','Date',.8,'date'],['project','Project',1,'select',projOpts],['person','Person',1,'select',peopleOpts]);
       if(c.status||r.status)H.push(['status','Status',.6,'select',[['','\u2013'],['draft','Draft'],['final','Final']]]);return H})())
     +(rtConf(r.type).num&&!r.no?'<p class="unfnote nop">No number yet. <button class="mini" data-act="recnum" data-id="'+id+'">Give it the next number</button></p>':'')
-    +(!r.project&&!r.person&&!r.filed?'<p class="unfnote nop">In your inbox until you choose a project or person. <button class="mini" data-act="keepunf" data-id="'+id+'">Keep unfiled</button></p>':'')+(r.type==='meeting'?carriedBox(id):'')+rRows('records',id,'d.',F.rows);
-};
+    +(!r.project&&!r.person&&!r.filed?'<p class="unfnote nop">In your inbox until you choose a project or person. <button class="mini" data-act="keepunf" data-id="'+id+'">Keep unfiled</button></p>':'')+(r.type==='meeting'?carriedBox(id):'')+rRows('records',id,'d.',F.rows)}finally{recCtx=null}return out}
 V.search=function(){var res=search(ui.q);
   return '<div class="head"><h1>Search</h1></div><input type="search" class="bigsearch" data-search="1" data-k="search2" value="'+esc(ui.q)+'" placeholder="Search everything" aria-label="Search everything">'+(ui.q.trim().length<2?'<p class="empty">Type at least two letters in the search box.</p>':
     box(res.length+' '+(res.length===1?'match':'matches')+' for "'+ui.q.trim()+'"',res.length?'<ul class="list">'+res.map(function(x){return '<li><button class="link"'+goAttr(x.go)+'>'+esc(x.where)+'</button><span>'+esc(x.text)+'</span></li>'}).join('')+'</ul>':'<p class="empty">Nothing matches. Try a shorter word.</p>'))};
@@ -2227,6 +2243,7 @@ V.rtypes=function(){var head='<div class="head"><h1>Record templates</h1><span c
   var tp=templates();
   var fmt=rtSet().numFmt||'{type}-{project}-{n}';
   return head+'<div class="rtfmt nop"><b>Record numbers</b> <input class="ein" data-b="single|settings|numFmt" data-k="numfmt" data-rr="1" value="'+esc(fmt)+'" style="width:220px" aria-label="Number format"><span class="meta">{type} is the prefix, {project} the project code (set it in each project\u2019s Code field, or it is made from the name), {n} the running number, {year} the year. Example: '+esc(recNumber('meeting','').no.replace(/^/,''))+'</span></div>'
+    +'<label class="ptck nop" style="margin:0 0 10px"><input type="checkbox" data-b="single|settings|popOff" data-k="popoff" data-rr="1"'+(single('settings').popOff?' checked':'')+'> On a computer, open records full page instead of in a panel over the page</label>'
     +'<p class="meta" style="margin:-4px 0 10px">Every type of record you can create. Rename them, change their layout, take them out of the New record menus, or add your own. Records already made keep their content.</p>'
     +'<div class="g">'+box('Record types','<ul class="list rtl">'+forms+'</ul>'
       +'<div class="head" style="padding:8px 9px 10px;margin:0;border-top:1px solid var(--rule)"><input class="ein" data-ui="rtname" data-k="ui|rtname" value="'+esc(ui.rtname||'')+'" placeholder="Name of a new record type, e.g. Site diary" aria-label="Name of a new record type" style="flex:1 1 220px"><button class="btn pri" data-act="addrtype">Create and lay it out</button></div>',
@@ -2747,7 +2764,7 @@ try{window.matchMedia('print').addEventListener('change',function(){setTimeout(r
 function render(focusKey){
   rendering=true;needRender=false;pending=false;
   var a=document.activeElement,fk=null,fv,ss,se;
-  if(!focusKey&&a&&a.dataset&&a.dataset.k&&(view.contains(a)||rail.contains(a))){fk=a.dataset.k;fv=a.value;try{ss=a.selectionStart;se=a.selectionEnd}catch(e){}}
+  if(!focusKey&&a&&a.dataset&&a.dataset.k&&(view.contains(a)||rail.contains(a)||popEl().contains(a))){fk=a.dataset.k;fv=a.value;try{ss=a.selectionStart;se=a.selectionEnd}catch(e){}}
   var cur=function(v,id){return ui.v===v&&(id==null||ui.id===id)?' aria-current="page"':''};
   var openA=allActions().filter(function(x){return !x.done}).length,nRec=Object.keys(store.records).length;
   var nIn=inboxItems().length+unfiled().length,moreOpen=/^(reset|dump|archive|rtypes)$/.test(ui.v)||ui.railMore;
@@ -2772,7 +2789,7 @@ function render(focusKey){
       var mb=document.createElement('button');mb.className='btn morebtn'+(menu?' menu':'');mb.dataset.act='more';mb.setAttribute('aria-expanded','false');mb.textContent='More';hd.insertBefore(mb,wrapA);
       if(rest.some(function(b){return /^Confirm/.test(b.textContent)})){wrapA.classList.add('open');mb.setAttribute('aria-expanded','true')}}}
   view.insertAdjacentHTML('beforeend','<datalist id="team">'+sorted('people').map(function(x){return x.d.name?'<option value="'+esc(x.d.name)+'">':''}).join('')+'</datalist>');
-  view.querySelectorAll('textarea').forEach(grow);initInk();regPics();
+  renderPop();view.querySelectorAll('textarea').forEach(grow);initInk();regPics();
   var k=focusKey||fk;
   if(k){var el=null;document.querySelectorAll('[data-k]').forEach(function(x){if(x.dataset.k===k)el=x});
     if(el){if(fk&&(el.dataset.add||el.dataset.search||el.dataset.tfi||el.name==='text')&&fv!==undefined)el.value=fv;
@@ -2794,7 +2811,22 @@ function goBack(){var t=null;while(hist.length&&!t){var h=hist.pop();if(placeNam
   if(!t){go(parentOf().v,parentOf().id,parentOf().tab);return}
   inkSel=null;closeMenu();closeSheet();ui.step=0;ui.v=t.v;ui.id=t.id||null;ui.tab=t.tab||'sheet';ui.edit=null;ui.confirm=null;remember();render();window.scrollTo(0,t.y||0);showCurrent()}
 window.addEventListener('popstate',function(){if(hist.length)goBack()});
-function go(v,id,tab){ui.hideEdit=null;if(ui.v!==v||ui.id!==(id||null)){hist.push({v:ui.v,id:ui.id,tab:ui.tab,y:window.scrollY});if(hist.length>60)hist.shift();try{history.pushState({lw:hist.length},'')}catch(e){}}
+/* ---- on a computer, records open in a panel over the page (like a Gmail draft): minimise it, open it full page, or close it ---- */
+var popFull=false;ui.pop=null;ui.mins=[];
+function popOK(){try{return !single('settings').popOff&&window.matchMedia('(min-width:1100px) and (pointer:fine)').matches}catch(e){return false}}
+function openPop(id){if(ui.pop&&ui.pop!==id){ui.mins=[ui.pop].concat(ui.mins.filter(function(x){return x!==ui.pop}))}ui.mins=ui.mins.filter(function(x){return x!==id}).slice(0,5);ui.pop=id;closeMenu();closeSheet();render()}
+function popEl(){var e=document.getElementById('recpop');if(!e){e=document.createElement('div');e.id='recpop';e.className='nop';document.body.appendChild(e)}return e}
+function renderPop(){var el=popEl();if(ui.v==='record'&&ui.pop===ui.id)ui.pop=null;if(ui.pop&&!store.records[ui.pop])ui.pop=null;
+  ui.mins=ui.mins.filter(function(x){return store.records[x]&&x!==ui.pop&&!(ui.v==='record'&&ui.id===x)});
+  if(!ui.pop&&!ui.mins.length||mode==='loading'){el.innerHTML='';el.classList.remove('on');return}
+  var old=el.querySelector('.popbody'),top=old&&old.dataset.id===ui.pop?old.scrollTop:0,nm=function(r){return (r.no?r.no+'  ':'')+(r.title||formDef(r.type).name)};
+  var h='';
+  if(ui.pop){var r=store.records[ui.pop];h+='<section class="popwin" role="dialog" aria-label="'+esc(nm(r))+'"><div class="pophead"><button class="poptitle" data-act="popmin" title="Minimise">'+esc(nm(r))+'<span>'+esc(formDef(r.type).name)+'</span></button>'
+    +'<button class="popb" data-act="popmin" aria-label="Minimise" title="Minimise">\u2013</button><button class="popb" data-act="popfull" aria-label="Open full page" title="Open full page">\u2922</button><button class="popb" data-act="popclose" aria-label="Close" title="Close">\u00D7</button></div>'
+    +'<div class="popbody" data-id="'+ui.pop+'">'+recBody(ui.pop)+'</div></section>'}
+  h+=ui.mins.map(function(x){var r=store.records[x];return '<div class="popchip"><button class="poptitle" data-act="popshow" data-id="'+x+'" title="Open">'+esc(nm(r))+'</button><button class="popb" data-act="popfull" data-id="'+x+'" aria-label="Open full page" title="Open full page">\u2922</button><button class="popb" data-act="popclose" data-id="'+x+'" aria-label="Close" title="Close">\u00D7</button></div>'}).join('');
+  el.innerHTML=h;el.classList.add('on');var nb=el.querySelector('.popbody');if(nb&&top)nb.scrollTop=top;el.querySelectorAll('textarea').forEach(grow)}
+function go(v,id,tab){if(v==='record'&&id&&!popFull&&ui.v!=='record'&&popOK()&&store.records[id]){openPop(id);return}popFull=false;ui.hideEdit=null;if(ui.v!==v||ui.id!==(id||null)){hist.push({v:ui.v,id:ui.id,tab:ui.tab,y:window.scrollY});if(hist.length>60)hist.shift();try{history.pushState({lw:hist.length},'')}catch(e){}}
   inkSel=null;closeMenu();closeSheet();ui.step=0;ui.v=v;ui.id=id||null;ui.tab=tab||'sheet';ui.edit=null;ui.confirm=null;remember();render();window.scrollTo(0,0);showCurrent();noteVisit()}
 
 /* ================= events ================= */
@@ -3073,6 +3105,10 @@ document.addEventListener('click',function(e){
     toast('Photo removed',function(){back=true;pd.row.ph.splice(Math.min(pj,pd.row.ph.length),0,gone);save(pd.q[0],pd.q[1]);render()});
     setTimeout(function(){if(!back&&root)root.collection('img').doc(gone.id).delete().catch(function(){})},15000);return}
   if(act==='regword'||act==='regxls'){var gq=a.dataset.key.split('|'),gdoc=store[gq[0]][gq[1]];if(!gdoc)return;exportReg(gdoc,gq[2],a.dataset.t,act==='regxls');return}
+  if(act==='popmin'){if(ui.pop){ui.mins=[ui.pop].concat(ui.mins);ui.pop=null;render()}return}
+  if(act==='popshow'){openPop(a.dataset.id);return}
+  if(act==='popclose'){var pc=a.dataset.id||ui.pop;if(pc===ui.pop)ui.pop=null;ui.mins=ui.mins.filter(function(x){return x!==pc});render();return}
+  if(act==='popfull'){var pf=a.dataset.id||ui.pop;if(pf===ui.pop)ui.pop=null;ui.mins=ui.mins.filter(function(x){return x!==pf});popFull=true;go('record',pf);return}
   if(act==='mine'){var mk=a.dataset.key.split('|'),marr=store[mk[0]][mk[1]]&&get(store[mk[0]][mk[1]],mk[2]),mrow=marr&&marr[+mk[3]];if(mrow){if(a.dataset.v==='1')mrow.mine=true;else delete mrow.mine;save(mk[0],mk[1]);toast(a.dataset.v==='1'?'Now with your actions':'Moved to other people\u2019s actions');render()}return}
   if(act==='rtopt'){ui.rtOpen=ui.rtOpen===a.dataset.t?null:a.dataset.t;render();return}
   if(act==='recnum'){var rn=store.records[a.dataset.id];if(rn){var nn2=recNumber(rn.type,rn.project,a.dataset.id);rn.no=nn2.no;rn.seq=nn2.seq;save('records',a.dataset.id);render()}return}
