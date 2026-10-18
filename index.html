@@ -798,6 +798,10 @@ li:hover > .aupdb,.aupdb:focus-visible{opacity:1}
 .mxsum .mx{color:var(--muted)} .mxsum .mx b{color:var(--ink); font-weight:600}
 .mxsum .best{color:var(--ink); background:var(--hit); padding:0 6px; border-radius:3px}
 .carry li{align-items:baseline}
+.youbox{display:flex; flex-direction:column; gap:8px; padding:10px 12px}
+.youbox label:first-child{display:flex; flex-wrap:wrap; gap:6px 10px; align-items:center; font-size:.85rem}
+.youbox label:first-child input{flex:1 1 260px}
+.youbox .meta{margin:0}
 </style>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
 <script src="firebase-config.js"></script>
@@ -1475,12 +1479,20 @@ function feedItems(){var out=[];
     if(b.kind!=='table'||b.hidden)return;var isAct=n.rec&&b.k==='actions';if(!b.feed&&!isAct&&!(n.id==='office'&&b.k==='items'))return;
     var fc=feedCols(b);if(!fc.t)return;
     (get(doc,n.base+b.k)||[]).forEach(function(row,i){if(!row||!row[fc.t.k])return;
-      out.push({t:row[fc.t.k],who:fc.w?row[fc.w.k]||'':'',due:fc.d?row[fc.d.k]||'':'',done:fc.c?!!row[fc.c.k]:false,pri:!!row.pri,project:n.project,person:n.person,src:isAct?n.label:b.t.toLowerCase().indexOf(n.label.toLowerCase())===0?b.t:n.label+', '+b.t,go:n.go,upd:row.upd||'',steps:row.steps,kind:row.kind||'',rowKey:n.kind+'|'+n.id+'|'+n.base+b.k+'|'+i,
+      out.push({t:row[fc.t.k],who:fc.w?row[fc.w.k]||'':'',due:fc.d?row[fc.d.k]||'':'',done:fc.c?!!row[fc.c.k]:false,pri:!!row.pri,tracked:!!row.mine,project:n.project,person:n.person,src:isAct?n.label:b.t.toLowerCase().indexOf(n.label.toLowerCase())===0?b.t:n.label+', '+b.t,go:n.go,upd:row.upd||'',steps:row.steps,kind:row.kind||'',rowKey:n.kind+'|'+n.id+'|'+n.base+b.k+'|'+i,
         bind:fc.c?n.kind+'|'+n.id+'|'+n.base+b.k+'|'+i+'|'+fc.c.k:null,dueBind:fc.d?n.kind+'|'+n.id+'|'+n.base+b.k+'|'+i+'|'+fc.d.k:null})})})})})});
   return out}
-function allActions(){if(actRev===rev&&actCache)return actCache;var out=[];
+/* which actions are yours: your own list always; rows from records and tables when their Who is one of your names (Settings), or you chose to track them */
+function myNames(){return String(single('settings').me||'').split(/[,;\n]+/).map(function(x){return x.trim().toLowerCase()}).filter(Boolean)}
+function whoIsMe(who,names){var w=String(who||'').trim().toLowerCase();if(!w)return null;return w.split(/\s*(?:[,\/&;+]|\band\b)\s*/).some(function(c){c=c.replace(/[()]/g,' ').trim();if(!c)return false;
+  return names.some(function(n){return c===n||(' '+c+' ').indexOf(' '+n+' ')>=0})})}
+function isOthers(a,names){if(a.own||a.tracked)return false;if(!names.length)return false;var m=whoIsMe(a.who,names);return m===null?!!single('settings').blankOthers:!m}
+var allCache=null, allRev=-1;
+function allActions(){if(allRev===rev&&allCache)return allCache;allCache=everyActions().filter(function(a){return !a.others});allRev=rev;return allCache}
+function othersActions(){return everyActions().filter(function(a){return a.others})}
+function everyActions(){if(actRev===rev&&actCache)return actCache;var out=[];
   (single('actions').list||[]).forEach(function(r,i){if(r.t)out.push({t:r.t,who:r.who,due:r.due,done:r.done,pri:!!r.pri,project:r.project,kind:r.kind||'',own:true,src:KINDN[r.kind]||'Your actions',go:{v:'actions'},upd:r.upd||'',steps:r.steps,rowKey:'single|actions|list|'+i,bind:'single|actions|list|'+i+'|done',dueBind:'single|actions|list|'+i+'|due'})});
-  actCache=out.concat(feedItems());actRev=rev;return actCache}
+  var nm=myNames();actCache=out.concat(feedItems());actCache.forEach(function(a){a.others=isOthers(a,nm)});actRev=rev;return actCache}
 function rollup(id){var p=store.projects[id],t=today(),out=[];
   var c=(p.changes||[]).filter(function(r){return r.what&&!r.ok}).length;if(c)out.push([c+' unapproved '+(c===1?'change':'changes'),true]);
   var v=(p.vendor||[]).filter(function(r){return r.due&&!r.rec&&r.due<t}).length;if(v)out.push([v+' vendor '+(v===1?'item':'items')+' overdue',true]);
@@ -1864,7 +1876,7 @@ V.reset=function(){var mon=isDate(ui.id)?mondayOf(ui.id):mondayOf(),w=weekDoc(mo
       return '<div class="tr"><div class="namecell"><button class="link" data-go="project" data-id="'+x.id+'">'+esc(x.d.name||'Untitled project')+'</button>'+(ru.length?'<span class="chips">'+ru.map(function(r){return '<span'+(r[1]?' class="warn"':'')+'>'+esc(r[0])+'</span>'}).join('')+'</span>':'')+'</div>'
         +f('projects',x.id,'status',{type:'select',opts:STATUS,label:'Status of '+(x.d.name||'project')})+f('projects',x.id,'dash.focus',{type:'area',label:'Focus this week',ph:'Focus this week'})+'</div>'}).join('')+'</div>':'<p class="empty">No projects yet.</p>','One line per project')+'</div>'}
   else if(st===4){var pe=sorted('people'),fri=addDays(mon,4)<t?t:addDays(mon,4);
-    b='<div class="g">'+box('People this week',pe.length?'<ul class="list">'+pe.map(function(x){var l=lastCheck(x.id),nm=x.d.name||'Unnamed',planned=allActions().filter(function(a){return !a.done&&a.t==='Check in with '+nm})[0];
+    b='<div class="g">'+box('People this week',pe.length?'<ul class="list">'+pe.map(function(x){var l=lastCheck(x.id),nm=x.d.name||'Unnamed',planned=everyActions().filter(function(a){return !a.done&&a.t==='Check in with '+nm})[0];
       return '<li><button class="link" data-go="person" data-id="'+x.id+'">'+esc(nm)+'</button><span class="k">'+(l?'last check-in '+fmtD(l):'no check-in yet')+'</span><span class="sp"></span>'
         +(planned?'<span class="k">Planned'+(planned.due?' for '+fmtD(planned.due):'')+'</span>':'<button class="mini" data-act="plancheck" data-id="'+x.id+'" data-due="'+fri+'">Plan a check-in</button>')+'</li>'}).join('')+'</ul>':'<p class="empty">No people yet.</p>','Planning a check-in adds an action due '+fmtD(fri))+'</div>'}
   else{var top=allActions().filter(function(x){return x.pri&&!x.done});b='<div class="g">'+box('Week planned',(top.length?'<ul class="list">'+top.map(function(r){return '<li><span class="ck nb"></span><span>'+esc(r.t)+'</span></li>'}).join('')+'</ul>':'')
@@ -1899,7 +1911,7 @@ V.projects=function(){var sp=projSplit(),ar=sorted('projects',true).length;
     +'<h2 class="grh">Internal</h2>'+(sp.int.length?'<div class="cards">'+sp.int.map(card).join('')+'</div>':'<p class="empty">Internal projects hold work that is not for a client, such as Team, Business development or Admin. Records and actions file to them in the same way.</p>')
     +(ar?'<p class="empty"><button class="mini" data-go="archive">'+ar+' archived</button></p>':'')};
 function teamCards(){var t=today();return sorted('people').map(function(x){var nm=(x.d.name||'').trim().toLowerCase(),
-    acts=nm?allActions().filter(function(a){return !a.done&&String(a.who||'').trim().toLowerCase()===nm}):[],next=acts.filter(function(a){return a.due}).sort(function(a,b){return a.due<b.due?-1:1})[0],
+    acts=nm?everyActions().filter(function(a){return !a.done&&String(a.who||'').trim().toLowerCase()===nm}):[],next=acts.filter(function(a){return a.due}).sort(function(a,b){return a.due<b.due?-1:1})[0],
     l=lastCheck(x.id),stale=l?l<addDays(t,-35):!!(x.d.ts&&Date.now()-x.d.ts>35*864e5),plan=(x.d.plan||[]).filter(function(g){return g&&g.goal&&!g.done}).sort(function(a,b){return (a.by||'9')<(b.by||'9')?-1:1})[0];
   return '<button class="pcard" data-go="person" data-id="'+x.id+'"><span class="pn">'+esc(x.d.name||'Unnamed')+'</span>'+(x.d.role?'<span class="k">'+esc(x.d.role)+'</span>':'')
     +((x.d.dash||{}).focus?'<span class="pf">'+esc(x.d.dash.focus)+'</span>':'')
@@ -2027,7 +2039,7 @@ V.person=function(){
   if(ui.edit)return h+editor(ui.edit);
   var hn=hideNote('people',id);
   if(ui.tab!=='sheet')return h+(rRows('people',id,'x.'+ui.tab.slice(2)+'.',getLayout(ui.tab).rows)||'<p class="empty">This tab has no sections yet. Choose Edit layout to add some.</p>')+hn;
-  var nm=(d.name||'').trim().toLowerCase(),mine=nm?allActions().filter(function(a){return !a.done&&String(a.who||'').trim().toLowerCase()===nm}).sort(function(a,b){return (a.due||'9')<(b.due||'9')?-1:1}):[],CA='34px 2fr 120px 1.3fr';
+  var nm=(d.name||'').trim().toLowerCase(),mine=nm?everyActions().filter(function(a){return !a.done&&String(a.who||'').trim().toLowerCase()===nm}).sort(function(a,b){return (a.due||'9')<(b.due||'9')?-1:1}):[],CA='34px 2fr 120px 1.3fr';
   var acts=box('Open actions',mine.length?'<div style="--cols:'+CA+'">'+mine.map(function(a){var late=isLate(a);
       return '<div class="tr">'+(a.bind?'<span class="ck"><input type="checkbox" data-l="'+a.bind+'" data-k="pa|'+a.bind+'" data-rr="1" aria-label="Done: '+esc(a.t)+'"></span>':'<span></span>')+'<div class="ro">'+esc(a.t)+'</div><div class="ro'+(late?' late-t':'')+'">'+fmtD(a.due)+(late?' overdue':'')+'</div><div class="ro"><button class="link"'+goAttr(a.go||{v:'actions'})+'>'+esc(a.src||'')+'</button></div></div>'}).join('')+'</div>'
     :'<p class="empty">Nothing open. Actions with '+esc(d.name||'this person')+' in the Who column appear here.</p>','Any action with this name in its Who column','','','people:_acts');
@@ -2054,7 +2066,7 @@ V.actions=function(){
   var C='34px 30px 2fr .7fr 110px 1.3fr 1.2fr';
   var rows=rec.map(function(a){var late=isLate(a);
     return '<div class="tr" style="--cols:'+C+'">'+(a.bind?'<span class="ck"><input type="checkbox" data-l="'+a.bind+'" data-k="'+a.bind+'" data-rr="1"'+(a.done?' checked':'')+' aria-label="Done: '+esc(a.t)+'"></span>':'<span></span>')+'<span class="ck">'+starBtn(a)+'</span>'
-      +'<div class="ro">'+esc(a.t)+'</div><div class="ro">'+esc(a.who)+'</div><div class="ro'+(late?' late-t':'')+'">'+fmtD(a.due)+(late?' overdue':'')+'</div><div class="ro"><button class="link"'+goAttr(a.go)+'>'+esc(a.src)+'</button></div>'+(a.rowKey?'<textarea class="in" rows="1" data-l="'+a.rowKey+'|upd" data-k="fr|'+a.rowKey+'|upd" placeholder="Update or close-out note" aria-label="Note for '+esc(a.t)+'">'+esc(a.upd||'')+'</textarea>':'<div></div>')+'</div>'}).join('');
+      +'<div class="ro">'+esc(a.t)+(a.tracked&&a.rowKey?' <button class="mini nop" style="margin-left:8px" data-act="mine" data-key="'+a.rowKey+'" data-v="0" title="Move it back to other people\u2019s actions">Not mine</button>':'')+'</div><div class="ro">'+esc(a.who)+'</div><div class="ro'+(late?' late-t':'')+'">'+fmtD(a.due)+(late?' overdue':'')+'</div><div class="ro"><button class="link"'+goAttr(a.go)+'>'+esc(a.src)+'</button></div>'+(a.rowKey?'<textarea class="in" rows="1" data-l="'+a.rowKey+'|upd" data-k="fr|'+a.rowKey+'|upd" placeholder="Update or close-out note" aria-label="Note for '+esc(a.t)+'">'+esc(a.upd||'')+'</textarea>':'<div></div>')+'</div>'}).join('');
   var AG=[['list','List'],['project','By project'],['person','By person'],['kind','By type'],['due','By due date']],g=ui.agroup||'list';
   var head='<div class="head"><h1>Actions</h1><div class="tabs">'+AG.map(function(x){return '<button data-act="agroup" data-g="'+x[0]+'" aria-pressed="'+(g===x[0])+'">'+x[1]+'</button>'}).join('')+'</div><span class="sp"></span>'
     +(g!=='list'?'<button class="mini" data-act="toggledone">'+(ui.showDone?'Hide done':'Show done')+'</button>':'')+pdfBtn+'</div>';
@@ -2062,8 +2074,17 @@ V.actions=function(){
   return head
     +'<div class="g">'+box('Your actions and follow-ups',table('single','actions','list',[{k:'done',type:'check',w:'34px',label:'Done'},{k:'pri',type:'star',w:'30px',label:'Priority',head:'★'},{k:'t',label:'Action',w:'2fr'},{k:'kind',label:'Type',type:'select',opts:KOPTS,w:'140px'},{k:'who',label:'Who',type:'who',w:'.7fr'},{k:'due',label:'Due',type:'date',w:'132px'},{k:'project',label:'Project',type:'select',opts:projOpts,w:'1fr'},{k:'upd',label:'Update or close-out note',head:'Notes',type:'area',w:'1.4fr'}],{wide:1,flag:isLate,hideRow:oldDone}),'')+'</div>'
     +'<div class="g">'+box('From records and your tables',(rows?'<div class="scroll"><div class="wide"><div class="tr th" style="--cols:'+C+'"><div></div><div>★</div><div>Action</div><div>Who</div><div>Due</div><div>Source</div><div>Notes</div></div>'+rows+'</div></div>':'<p class="empty">'+(ui.showDone?'Nothing yet.':'Nothing open.')+' Actions written in records collect here, and so do rows from any table you mark in the layout editor.</p>'),
-      'Changes here update the source record','<button class="mini" data-act="toggledone">'+(ui.showDone?'Hide done':'Show done')+'</button>')+'</div>';
+      'Changes here update the source record','<button class="mini" data-act="toggledone">'+(ui.showDone?'Hide done':'Show done')+'</button>')+'</div>'
+    +othersBox();
 };
+function othersBox(){var nm=myNames();
+  if(!nm.length){var any=everyActions().some(function(a){return !a.own&&!a.done&&a.who});return any?'<p class="meta nop" style="margin:4px 0 12px">Actions in meeting notes and other records count as yours. To keep other people\u2019s actions out of your lists, add your names or initials under <button class="link" data-go="settings">Settings, You</button>.</p>':''}
+  var oa=othersActions().filter(function(a){return ui.showDone||!a.done}).sort(byDue),C='34px 2fr .7fr 110px 1.3fr 110px';if(!oa.length)return '';
+  var fk='othersacts',rows=oa.map(function(a){var late=isLate(a);return '<div class="tr" style="--cols:'+C+'">'+(a.bind?'<span class="ck"><input type="checkbox" data-l="'+a.bind+'" data-k="'+a.bind+'" data-rr="1"'+(a.done?' checked':'')+' aria-label="Done: '+esc(a.t)+'"></span>':'<span></span>')
+    +'<div class="ro">'+esc(a.t)+'</div><div class="ro">'+esc(a.who||'No one named')+'</div><div class="ro'+(late?' late-t':'')+'">'+fmtD(a.due)+(late?' overdue':'')+'</div><div class="ro"><button class="link"'+goAttr(a.go)+'>'+esc(a.src)+'</button></div>'
+    +'<div class="ro">'+(a.rowKey?'<button class="mini" data-act="mine" data-key="'+a.rowKey+'" data-v="1" title="Show it with your actions and on the dashboard">Track as mine</button>':'')+'</div></div>'}).join('');
+  return '<div class="g">'+box('Other people\u2019s actions ('+oa.length+')','<div class="scroll"><div class="wide"><div class="tr th" style="--cols:'+C+'"><div></div><div>Action</div><div>Who</div><div>Due</div><div>Source</div><div></div></div>'+rows+'</div></div>',
+    'From your records. They stay out of your counts, dashboard and week.','',null,'actions:others')+'</div>'}
 /* the Actions page grouped like Records: every action, own and from records, filed by one key */
 function actGroups(g){var t=today(),all=allActions().filter(function(a){return ui.showDone||!a.done}).sort(byDue);
   if(!all.length)return '<p class="empty">'+(ui.showDone?'No actions yet.':'No open actions.')+' Add actions in the List view, or in any record.</p>';
@@ -2152,7 +2173,11 @@ V.rtypes=function(){var head='<div class="head"><h1>Record templates</h1><span c
 V.settings=function(){
   var pg=pages(),SC=[['page','A page in the side menu'],['project','A tab on every project'],['person','A tab on every person'],['form','A type of record']];
   if(ui.edit)return '<div class="head"><h1>Settings</h1></div>'+editor(ui.edit);
+  var stS=single('settings');
   return '<div class="head"><h1>Settings</h1></div>'
+    +'<div class="g">'+box('You','<div class="youbox"><label>Your names and initials <input class="ein" data-b="single|settings|me" data-k="setme" data-rr="1" value="'+esc(stS.me||'')+'" placeholder="e.g. Will, WS, Will Smith" aria-label="Your names and initials"></label>'
+      +'<label class="ptck"><input type="checkbox" data-b="single|settings|blankOthers" data-k="setblank" data-rr="1"'+(stS.blankOthers?' checked':'')+'> Treat actions with no Who as someone else\u2019s</label>'
+      +'<p class="meta">Actions in records whose Who is not one of these go to Other people\u2019s actions, out of your counts, dashboard and week. Your own action list is always yours. Leave it empty to count everything as yours.</p></div>','Used only to sort actions. Separate names with commas.')+'</div>'
     +'<div class="g">'+box('Your own pages and tabs',(pg.some(function(p){return p.scope!=='form'})?'<ul class="list">'+pg.map(function(p,i){if(p.scope==='form')return '';var nk='single|layouts|pages.'+i+'.name';
         return '<li><input class="ein" data-b="'+nk+'" data-k="'+nk+'" data-rr="1" value="'+esc(p.name)+'" placeholder="Name" aria-label="Name" style="flex:0 1 240px"><span class="k">'+esc(SC.filter(function(x){return x[0]===p.scope})[0][1])+'</span><span class="sp"></span>'
           +'<button class="mini" data-act="edit" data-lid="c_'+p.id+'">Edit layout</button><button class="mini" data-act="rmpage" data-i="'+i+'">'+(ui.confirm==='pg'+i?'Confirm remove':'Remove')+'</button></li>'}).join('')+'</ul>':'<p class="empty">Nothing added yet. Create a page or a tab, then build its layout from sections.</p>')
@@ -2949,6 +2974,7 @@ document.addEventListener('click',function(e){
   if(act==='menu'){document.documentElement.classList.toggle('menu-open');return}
   if(act==='msearch'){go('search');render('search2');return}
   if(act==='capsheet'){openSheet();return}
+  if(act==='mine'){var mk=a.dataset.key.split('|'),marr=store[mk[0]][mk[1]]&&get(store[mk[0]][mk[1]],mk[2]),mrow=marr&&marr[+mk[3]];if(mrow){if(a.dataset.v==='1')mrow.mine=true;else delete mrow.mine;save(mk[0],mk[1]);toast(a.dataset.v==='1'?'Now with your actions':'Moved to other people\u2019s actions');render()}return}
   if(act==='rtopt'){ui.rtOpen=ui.rtOpen===a.dataset.t?null:a.dataset.t;render();return}
   if(act==='recnum'){var rn=store.records[a.dataset.id];if(rn){var nn2=recNumber(rn.type,rn.project,a.dataset.id);rn.no=nn2.no;rn.seq=nn2.seq;save('records',a.dataset.id);render()}return}
   if(act==='undolast'){undoLast();return}
