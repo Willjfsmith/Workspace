@@ -819,23 +819,50 @@ function sorted(kind,arch){return Object.keys(store[kind]).map(function(id){retu
   .sort(function(a,b){return (a.d.order!=null?a.d.order:a.d.ts||0)-(b.d.order!=null?b.d.order:b.d.ts||0)})}
 function saveError(e){var c=e&&e.code;
   toast(c==='too_big'?'That entry is too large to save (over 1 MB). Remove some handwriting or split it up.':c==='permission-denied'?"That change wasn't saved. Sign out and back in, then try again.":c==='quota_exceeded'||c==='resource-exhausted'?'Storage is full. Delete something, then try again.':c==='invalid_argument'?"That change wasn't saved. Your access to this page may be view-only.":"That change wasn't saved. Check your connection and try again.")}
+/* ---- handwriting is saved in its own pieces ('ink' documents) once it gets big: a page can hold far more than one
+   database entry allows, and each new stroke only re-saves the last piece. Small handwriting stays inside its record. ---- */
+var INKC={}, inkKnown={}, inkSeen=false, INK_INLINE=40000, INK_CHUNK=250000;
+function isInk(v){return !!v&&typeof v==='object'&&!Array.isArray(v)&&typeof v.h==='number'&&(Array.isArray(v.s)||!!v.ref)}
+function inkWalk(o,path,cb){if(!o||typeof o!=='object')return;Object.keys(o).forEach(function(k){var v=o[k];if(!v||typeof v!=='object'||Array.isArray(v))return;var pth=path?path+'.'+k:k;if(isInk(v))cb(v,pth,o,k);else inkWalk(v,pth,cb)})}
+function cidOf(kind,id,pth,i){return kind+'~'+id+'~'+pth+'~'+i}
+function dehydrate(kind,id,body){var want={},writes=[];
+  inkWalk(body,'',function(v,pth,parent,k){var o={},z;
+    if(v._pending){for(z in v)if(z!=='_pending'&&z!=='s')o[z]=v[z];for(var j=0;j<(v.k||0);j++)want[cidOf(kind,id,pth,j)]=1;parent[k]=o;return}
+    var st=v.s||[],tot=0;st.forEach(function(x){tot+=x.length});
+    if(tot<=INK_INLINE){for(z in v)if(z!=='ref'&&z!=='k'&&z!=='n')o[z]=v[z];parent[k]=o;return}
+    var chunks=[],cur=[],size=0;st.forEach(function(x){if(size+x.length>INK_CHUNK&&cur.length){chunks.push(cur);cur=[];size=0}cur.push(x);size+=x.length});if(cur.length)chunks.push(cur);
+    chunks.forEach(function(c,i){var cid=cidOf(kind,id,pth,i),old=INKC[cid];want[cid]=1;if(!old||old.length!==c.length||old[old.length-1]!==c[c.length-1]||old.join('\n')!==c.join('\n'))writes.push({cid:cid,s:c})});
+    for(z in v)if(z!=='s')o[z]=v[z];o.ref=1;o.k=chunks.length;o.n=st.length;parent[k]=o});
+  return {want:want,writes:writes}}
+function hydrate(kind,id,body){var pend=false;inkWalk(body,'',function(v,pth){if(!v.ref)return;var all=[],ok=true;
+    for(var i=0;i<(v.k||0);i++){var c=INKC[cidOf(kind,id,pth,i)];if(!c){ok=false;break}all=all.concat(c)}
+    if(ok&&all.length===(v.n==null?all.length:v.n)){v.s=all;delete v._pending}else{if(!Array.isArray(v.s))v.s=[];v._pending=1;pend=true}});return pend}
+function inkIntake(snap){INKC={};inkKnown={};snap.docs.forEach(function(d){var q=d.id.split('~');INKC[d.id]=(d.data()||{}).s||[];(inkKnown[q[0]+'/'+q[1]]||(inkKnown[q[0]+'/'+q[1]]={}))[d.id]=1});
+  var changed=false;KINDS.forEach(function(kind){Object.keys(store[kind]).forEach(function(id){var key=kind+'/'+id,doc=store[kind][id],has=false;if(dirty[key]||inflight[key])return;
+    inkWalk(doc,'',function(v){if(v.ref)has=true});if(!has)return;var before=stable(doc);hydrate(kind,id,doc);if(stable(doc)!==before)changed=true})});
+  if(changed)rev++;return changed}
 function flush(kind,id){
   var key=kind+'/'+id;if(!root){dirty[key]=false;return Promise.resolve()}
   if(inflight[key]||!store[kind][id])return Promise.resolve();
   dirty[key]=false;inflight[key]=true;saving++;status();
   var body=clone(store[kind][id]);body.updated=today();store[kind][id].updated=body.updated;
-  return root.collection(kind).doc(id).set(body).catch(saveError).then(function(){inflight[key]=false;saving--;status();if(dirty[key])return flush(kind,id)});
+  var ik=dehydrate(kind,id,body),known=inkKnown[key]||(inkKnown[key]={}),dels=Object.keys(known).filter(function(c){return !ik.want[c]});
+  /* written in this order (the database keeps one device's writes in order): new pieces, then the record that points at them, then pieces no longer used */
+  var jobs=ik.writes.map(function(w){known[w.cid]=1;return root.collection('ink').doc(w.cid).set({s:w.s}).then(function(){INKC[w.cid]=w.s})});
+  jobs.push(root.collection(kind).doc(id).set(body));
+  dels.forEach(function(c){delete known[c];jobs.push(root.collection('ink').doc(c).delete().then(function(){delete INKC[c]},function(){}))});
+  return Promise.all(jobs).catch(saveError).then(function(){inflight[key]=false;saving--;status();if(dirty[key])return flush(kind,id)});
 }
 function save(kind,id,now){var key=kind+'/'+id;dirty[key]=true;rev++;clearTimeout(timers[key]);
   if(now)flush(kind,id);else timers[key]=setTimeout(function(){flush(kind,id)},600)}
 function put(kind,id,doc){store[kind][id]=doc;fresh[kind+'/'+id]=Date.now();delete gone[kind+'/'+id];save(kind,id,true);return id}
 function remove(kind,id){var key=kind+'/'+id;rev++;delete store[kind][id];gone[key]=true;clearTimeout(timers[key]);dirty[key]=false;
-  if(root)root.collection(kind).doc(id).delete().catch(saveError)}
+  if(root){root.collection(kind).doc(id).delete().catch(saveError);Object.keys(inkKnown[key]||{}).forEach(function(c){root.collection('ink').doc(c).delete().catch(function(){})});delete inkKnown[key]}}
 function stable(o){return JSON.stringify(o,function(k,v){if(v&&typeof v==='object'&&!Array.isArray(v)){var out={};Object.keys(v).sort().forEach(function(x){out[x]=v[x]});return out}return v})}
 function intake(kind,snap){
   var changed=false,ids={};rev++;
   snap.docs.forEach(function(d){var key=kind+'/'+d.id;ids[d.id]=1;if(gone[key]||dirty[key]||inflight[key])return;
-    var body=d.data();if(stable(body)!==stable(store[kind][d.id])){store[kind][d.id]=clone(body);changed=true}});
+    var body=clone(d.data());hydrate(kind,d.id,body);if(stable(body)!==stable(store[kind][d.id])){store[kind][d.id]=body;changed=true}});
   Object.keys(store[kind]).forEach(function(id){var key=kind+'/'+id;
     if(!ids[id]&&!dirty[key]&&!inflight[key]&&!(fresh[key]&&Date.now()-fresh[key]<15000)&&kind!=='single'&&kind!=='days'){delete store[kind][id];changed=true}});
   Object.keys(gone).forEach(function(key){var p=key.split('/');if(p[0]===kind&&!ids[p[1]])delete gone[key]});
@@ -2217,7 +2244,7 @@ window.__lw={model:function(){return currentModel()},pdf:makePdf};
 var INK_RGB=[[17,17,17],[29,95,166],[196,48,43]], inkUI={tool:'pen',color:0,finger:false,width:2,shapes:false,bar:false,more:false}, inkCur=null, inkHist={}, inkCache={}, inkOpen={}, capS={db:'checking',user:'checking',assets:'checking',downloads:'checking'};
 try{var iu=JSON.parse(localStorage.getItem('lw.ink')||'null');if(iu){inkUI.color=iu.color|0;inkUI.finger=!!iu.finger;inkUI.width=iu.width||2;inkUI.bar=!!iu.bar}}catch(e){}
 var UN=1000/760;   /* layout units per pixel on a 760px-wide pad */
-var IOS_STYLUS=typeof Touch!=='undefined'&&!!Touch.prototype&&'touchType' in Touch.prototype, manualScroll=false, INK_MAX=210000;
+var IOS_STYLUS=typeof Touch!=='undefined'&&!!Touch.prototype&&'touchType' in Touch.prototype, manualScroll=false, INK_MAX=3000000, INK_HMAX=60000;
 function inkData(key,create,h0){var p=key.split('|'),doc=store[p[0]]&&store[p[0]][p[1]];if(!doc)return null;var d=get(doc,p[2]);
   if(!d||typeof d!=='object'||!Array.isArray(d.s)){if(!create)return null;d={h:h0||420,s:[]};setp(doc,p[2],d)}return d}
 function inkSave(key){var p=key.split('|');save(p[0],p[1])}
@@ -2316,7 +2343,8 @@ function inkBegin(cv,cx,cy,pr,erase,src,id){var key=cv.dataset.ink,d=inkData(key
     else if(bb&&q[0]>=bb.x0&&q[0]<=bb.x1&&q[1]>=bb.y0&&q[1]<=bb.y1)mode='move';
     else{mode='lasso';inkSel=null}}
   else if(inkSel){inkSel=null;drawInk(cv);inkBars()}
-  if(mode==='draw'&&d.s.length>40&&d.s.join('').length>INK_MAX){toast('This handwriting area is full. Add another section or start a new record to keep writing.');return}
+  if(d._pending){toast('This handwriting is still loading. Try again in a moment.');return}
+  if(mode==='draw'&&d.s.length>400&&d.s.join('').length>INK_MAX){toast('This handwriting area is full. Start a new record to keep writing.');return}
   inkCur={cv:cv,key:key,d:d,mode:mode,erase:mode==='erase',src:src,id:id,pts:[],before:d.s.slice(),tool:inkUI.tool==='hl'?'h':'p',color:inkUI.color,width:inkUI.width,changed:false,start:q,bb:bb,lastT:Date.now(),
     orig:mode==='move'||mode==='scale'?inkSel.idx.map(function(i){return {i:i,st:decode(d.s[i])}}):null};
   var hadSel=!!bb||mode!=='draw'&&mode!=='erase';inkMove(cx,cy,pr);if(hadSel)inkBars()}
@@ -2342,7 +2370,7 @@ function inkEnd(){var c=inkCur;if(!c)return;inkCur=null;
     inkSel=idx.length?{key:c.key,idx:idx}:null;sizeKey(c.key);inkBars();if(pending)setTimeout(render,0);return}
   if(c.mode==='draw'&&c.pts.length){var shape=c.tool==='p'&&inkUI.shapes?snapShape(c.pts):null;
     c.d.s.push(shape?encode(shape.pts,shape.tool,c.color,c.width,true):encode(c.pts,c.tool,c.color,c.width));c.changed=true;
-    var low=0,grew=false;c.pts.forEach(function(p){if(p[1]>low)low=p[1]});if(low>c.d.h-150&&c.d.h<9000){c.d.h=Math.min(9000,c.d.h+340);grew=true}
+    var low=0,grew=false;c.pts.forEach(function(p){if(p[1]>low)low=p[1]});if(low>c.d.h-500&&c.d.h<INK_HMAX){c.d.h=Math.min(INK_HMAX,Math.max(c.d.h+340,Math.ceil(low+800)));grew=true}
     if(c.tool==='p'&&!shape&&!grew){            /* the stroke is already on the canvas as drawn: finish its tip and leave everything else alone */
       var ctx=c.cv.getContext&&c.cv.getContext('2d');if(ctx&&c.pts.length===1)strokeTo(ctx,{tool:'p',color:c.color,wf:WF[c.width],pts:c.pts},c.cv._sc||1,themeVar('--ink','#111111'),.9*(c.cv._dpr||1));
       var hq=inkHistory(c.key);hq.u.push(c.before);if(hq.u.length>60)hq.u.shift();hq.r=[];inkSave(c.key);if(pending)setTimeout(render,0);return}}
@@ -2395,7 +2423,7 @@ function inkAct(a,key,btn){
   if(a==='seldel'){if(!inkSel||inkSel.key!==key)return;hs.u.push(d.s.slice());hs.r=[];var gone3=inkSel.idx;d.s=d.s.filter(function(_,i){return gone3.indexOf(i)<0})}
   else if(a==='undo'){if(!hs.u.length)return;hs.r.push(d.s.slice());d.s=hs.u.pop()}
   else if(a==='redo'){if(!hs.r.length)return;hs.u.push(d.s.slice());d.s=hs.r.pop()}
-  else if(a==='more'){d.h=Math.min(9000,(d.h||420)+340)}
+  else if(a==='more'){d.h=Math.min(INK_HMAX,(d.h||420)+800)}
   else if(a==='clear'){if(!d.s.length)return;hs.u.push(d.s.slice());hs.r=[];d.s=[];toast('Handwriting cleared',function(){inkAct('undo',key)})}
   inkSel=null;inkSave(key);sizeKey(key);inkBars()}
 /* ================= render ================= */
@@ -2757,9 +2785,12 @@ Promise.all([use('db'),use('user')]).then(function(r){
     if(!db||!uid){mode='local';render();return}
     root=db.doc('users/'+uid);
     var fail=function(){if(mode==='loading'){mode='local';root=null}toast('Lost the connection to your saved workspace. Reload the page.');schedule()};
+    var ready=function(){return inkSeen&&KINDS.every(function(k){return seen[k]})};
+    root.collection('ink').onSnapshot(function(snap){var changed=inkIntake(snap),first=!inkSeen;inkSeen=true;
+      if(mode==='loading'&&ready()){mode='saved';migrate();changed=true}if(changed||first)schedule()},fail);
     KINDS.forEach(function(kind){root.collection(kind).onSnapshot(function(snap){
       var changed=intake(kind,snap),first=!seen[kind];seen[kind]=1;
-      if(mode==='loading'&&KINDS.every(function(k){return seen[k]})){mode='saved';migrate();changed=true}
+      if(mode==='loading'&&ready()){mode='saved';migrate();changed=true}
       if(changed||first)schedule()},fail)});
   });
 });
