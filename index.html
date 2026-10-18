@@ -776,6 +776,13 @@ li:hover > .aupdb,.aupdb:focus-visible{opacity:1}
 .agi .rich{min-height:70px}
 .agadd{display:flex; gap:6px; align-items:flex-start; padding:7px 9px; border-top:1px solid var(--rule)}
 .agadd textarea{flex:1; border:1px solid var(--line); border-radius:2px; min-height:2.2em}
+/* ---- Undo ---- */
+#rail .brand .sp{flex:1}
+#rail .brand .undob{all:unset; cursor:pointer; font:500 .72rem var(--body); color:var(--muted); border:1px solid var(--rule); border-radius:3px; padding:2px 7px; white-space:nowrap}
+#rail .brand .undob:hover:not(:disabled){color:var(--ink); border-color:var(--ink)}
+.undob:disabled{opacity:.4; cursor:default}
+#topbar .undob{margin-left:auto}
+#topbar .undob + button{margin-left:6px}
 </style>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
 <script src="firebase-config.js"></script>
@@ -789,7 +796,7 @@ li:hover > .aupdb,.aupdb:focus-visible{opacity:1}
 </head>
 <body>
 <nav id="rail" aria-label="Workspace"></nav>
-<header id="topbar"><button data-act="menu" aria-label="Open the menu">Menu</button><span class="tt"><svg class="logo" viewBox="0 0 64 64" aria-hidden="true"><rect class="lt" width="64" height="64" rx="14"/><rect class="lb" x="13" y="16" width="22" height="7" rx="3.5"/><rect class="lb" x="21" y="28.5" width="30" height="7" rx="3.5"/><rect class="lb" x="13" y="41" width="15" height="7" rx="3.5"/><rect class="ll" x="41.25" y="11" width="2.5" height="42" rx="1.25"/></svg>Workspace</span><button data-act="msearch">Search</button></header>
+<header id="topbar"><button data-act="menu" aria-label="Open the menu">Menu</button><span class="tt"><svg class="logo" viewBox="0 0 64 64" aria-hidden="true"><rect class="lt" width="64" height="64" rx="14"/><rect class="lb" x="13" y="16" width="22" height="7" rx="3.5"/><rect class="lb" x="21" y="28.5" width="30" height="7" rx="3.5"/><rect class="lb" x="13" y="41" width="15" height="7" rx="3.5"/><rect class="ll" x="41.25" y="11" width="2.5" height="42" rx="1.25"/></svg>Workspace</span><button class="undob" data-act="undolast" aria-label="Undo" disabled>&#8630; Undo</button><button data-act="msearch">Search</button></header>
 <main id="view"></main>
 <div id="inkfs" role="dialog" aria-label="Handwriting page"></div>
 <div id="lb" role="dialog" aria-label="Photo viewer"></div>
@@ -889,16 +896,38 @@ function flush(kind,id){
   dels.forEach(function(c){delete known[c];jobs.push(root.collection('ink').doc(c).delete().then(function(){delete INKC[c]},function(){}))});
   return Promise.all(jobs).catch(saveError).then(function(){inflight[key]=false;saving--;status();if(dirty[key])return flush(kind,id)});
 }
-function save(kind,id,now){var key=kind+'/'+id;dirty[key]=true;rev++;clearTimeout(timers[key]);
+/* ---- Undo: every save remembers how the item looked just before. A quick burst (typing, a tick that also logs it as done) is one step. ---- */
+var shadow={},undoStack=[],undoReady=false,undoing=false,UNDO_MAX=40;
+function docSnap(kind,id){var d=store[kind][id];return d==null?null:JSON.stringify(d)}
+var NOUNDO={'single/state':1};
+function undoNote(kind,id,gone){var key=kind+'/'+id;if(undoing||!undoReady||NOUNDO[key]){shadow[key]=gone?null:docSnap(kind,id);return}
+  var now=Date.now(),top=undoStack[undoStack.length-1],before=key in shadow?shadow[key]:null,cur=gone?null:docSnap(kind,id);
+  if(gone&&before==null)before=docSnap(kind,id);
+  if(before===cur)return;
+  if(top&&now-top.last<1500&&top.items.some(function(x){return x.key===key})){top.last=now}
+  else if(top&&now-top.last<400){top.items.push({kind:kind,id:id,key:key,before:before});top.last=now}
+  else{undoStack.push({at:now,last:now,items:[{kind:kind,id:id,key:key,before:before}]});var tot=0;for(var i=undoStack.length-1;i>=0;i--){tot+=undoStack[i].items.reduce(function(a,x){return a+(x.before?x.before.length:0)},0);if(tot>24e6||undoStack.length-i>UNDO_MAX){undoStack.splice(0,i+1);break}}}
+  shadow[key]=cur;undoUI()}
+function undoLabel(st){var it=st.items.filter(function(x){return !(x.kind==='single'&&x.id==='donelog')})[0]||st.items[0],k=it.kind,id=it.id,d=store[k][id]||(it.before?JSON.parse(it.before):{});
+  if(k==='projects'||k==='people')return d.name||'an item';if(k==='records')return recLabel(d);
+  return {actions:'Actions',inbox:'the Inbox',dash:'the Dashboard',settings:'Settings',layouts:'a layout',bd:'Business development',office:'Team',sched:'Resourcing'}[id]||(k==='days'?'a day':'an item')}
+function undoUI(){var on=undoStack.length>0,t=on?'Undo the last change to '+undoLabel(undoStack[undoStack.length-1]):'Nothing to undo';
+  document.querySelectorAll('[data-act="undolast"]').forEach(function(b){b.disabled=!on;b.title=t;b.setAttribute('aria-label',t)})}
+function undoLast(){var st=undoStack.pop();if(!st){toast('Nothing to undo');undoUI();return}var lab=undoLabel(st);undoing=true;
+  try{st.items.slice().reverse().forEach(function(x){var key=x.key;clearTimeout(timers[key]);
+    if(x.before==null){if(store[x.kind][x.id]){remove(x.kind,x.id)}shadow[key]=null}
+    else{store[x.kind][x.id]=JSON.parse(x.before);fresh[key]=Date.now();delete gone[key];shadow[key]=x.before;save(x.kind,x.id,true)}})}finally{undoing=false}
+  rev++;inkSel=null;render();undoUI();toast('Undid the last change to '+lab)}
+function save(kind,id,now){var key=kind+'/'+id;undoNote(kind,id);dirty[key]=true;rev++;clearTimeout(timers[key]);
   if(now)flush(kind,id);else timers[key]=setTimeout(function(){flush(kind,id)},600)}
 function put(kind,id,doc){store[kind][id]=doc;fresh[kind+'/'+id]=Date.now();delete gone[kind+'/'+id];save(kind,id,true);return id}
-function remove(kind,id){var key=kind+'/'+id;rev++;delete store[kind][id];gone[key]=true;clearTimeout(timers[key]);dirty[key]=false;
+function remove(kind,id){var key=kind+'/'+id;if(store[kind][id]!=null)undoNote(kind,id,true);rev++;delete store[kind][id];gone[key]=true;clearTimeout(timers[key]);dirty[key]=false;
   if(root){root.collection(kind).doc(id).delete().catch(saveError);Object.keys(inkKnown[key]||{}).forEach(function(c){root.collection('ink').doc(c).delete().catch(function(){})});delete inkKnown[key]}}
 function stable(o){return JSON.stringify(o,function(k,v){if(v&&typeof v==='object'&&!Array.isArray(v)){var out={};Object.keys(v).sort().forEach(function(x){out[x]=v[x]});return out}return v})}
 function intake(kind,snap){
   var changed=false,ids={};rev++;
   snap.docs.forEach(function(d){var key=kind+'/'+d.id;ids[d.id]=1;if(gone[key]||dirty[key]||inflight[key])return;
-    var body=clone(d.data());hydrate(kind,d.id,body);if(stable(body)!==stable(store[kind][d.id])){store[kind][d.id]=body;changed=true}});
+    var body=clone(d.data());hydrate(kind,d.id,body);if(stable(body)!==stable(store[kind][d.id])){store[kind][d.id]=body;changed=true}shadow[key]=JSON.stringify(store[kind][d.id])});
   Object.keys(store[kind]).forEach(function(id){var key=kind+'/'+id;
     if(!ids[id]&&!dirty[key]&&!inflight[key]&&!(fresh[key]&&Date.now()-fresh[key]<15000)&&kind!=='single'&&kind!=='days'){delete store[kind][id];changed=true}});
   Object.keys(gone).forEach(function(key){var p=key.split('/');if(p[0]===kind&&!ids[p[1]])delete gone[key]});
@@ -2518,7 +2547,7 @@ function render(focusKey){
   var openA=allActions().filter(function(x){return !x.done}).length,nRec=Object.keys(store.records).length;
   var nIn=inboxItems().length+unfiled().length,moreOpen=/^(reset|dump|archive|rtypes)$/.test(ui.v)||ui.railMore;
   var R=function(v,l,n,on){return '<button data-go="'+v+'"'+(on||cur(v))+'>'+l+(n?'<span class="n">'+n+'</span>':'')+'</button>'};
-  rail.innerHTML='<div class="brand">'+LOGO+'Workspace</div><input type="search" data-search="1" data-k="search" placeholder="Search" aria-label="Search the workspace" value="'+esc(ui.q)+'">'
+  rail.innerHTML='<div class="brand">'+LOGO+'Workspace<span class="sp"></span><button class="undob" data-act="undolast" aria-label="Undo">\u21B6 Undo</button></div><input type="search" data-search="1" data-k="search" placeholder="Search" aria-label="Search the workspace" value="'+esc(ui.q)+'">'
     +'<select class="newsel" data-new="1" data-k="newsel" aria-label="Create something new"><option value="">New\u2026</option><option value="action">Action</option><option value="project">Project</option><option value="person">Person</option>'+formGroups().map(function(g){return '<optgroup label="'+esc(g.group)+'">'+g.items.map(function(o){return '<option value="r:'+esc(o[0])+'">'+esc(o[1])+'</option>'}).join('')+'</optgroup>'}).join('')+'</select>'
     +R('dash','Dashboard')+R('inbox','Inbox',nIn)+R('actions','Actions',openA)+R('week','Week',0,ui.v==='week'||ui.v==='today'?' aria-current="page"':'')+R('gsched','Schedule')+R('sched','Resourcing')+R('records','Records',nRec,ui.v==='records'||ui.v==='record'?' aria-current="page"':'')+R('bd','Business development')+R('team','Team',0,/^(team|office|people)$/.test(ui.v)?' aria-current="page"':'')
     +'<div class="sec"><button class="secb" data-go="projects">Projects</button></div>'+(function(){var sp=projSplit(),pb=function(x){return '<button data-go="project" data-id="'+x.id+'"'+cur('project',x.id)+'>'+mark(x.d.status)+'<span style="overflow:hidden;text-overflow:ellipsis">'+esc(x.d.name||'Untitled project')+'</span></button>'};
@@ -2528,7 +2557,7 @@ function render(focusKey){
     +'<button class="railmore" data-act="railmore" aria-expanded="'+!!moreOpen+'" style="margin-top:10px">More</button>'
     +(moreOpen?R('reset','Monday planning')+R('dump','Friday review')+R('rtypes','Record templates')+R('archive','Archive'):'')
     +R('settings','Settings')+'<div id="status"></div>';
-  status();tabbar();
+  status();tabbar();undoUI();
   if(!V[ui.v])ui.v='dash';
   view.innerHTML=mode==='loading'?'<p class="empty">Loading your workspace.</p>':backBar()+V[ui.v]();
   var hd=view.querySelector('.head');
@@ -2676,7 +2705,8 @@ document.addEventListener('pointerdown',function(e){var c=e.target.closest&&e.ta
   var d=e.target.closest&&e.target.closest('input[type=date]');
   if(d&&isDue(d)){if(narrow()||matchMedia('(pointer:coarse)').matches){e.preventDefault();if(dcFor===d){dcClose();return}dcOpen(d)}else if(dcFor!==d)setTimeout(function(){dcOpen(d)},0);return}
   if(dcEl&&!(e.target.closest&&e.target.closest('.datechips')))dcClose()},true);
-document.addEventListener('keydown',function(e){if(e.key==='Escape')dcClose()});
+document.addEventListener('keydown',function(e){if(e.key==='Escape')dcClose();
+  if((e.ctrlKey||e.metaKey)&&!e.shiftKey&&(e.key==='z'||e.key==='Z')){var t=e.target;if(t&&(/^(INPUT|TEXTAREA|SELECT)$/.test(t.tagName)||t.isContentEditable))return;e.preventDefault();undoLast()}});
 /* the chip acts on the finished tap, so the tap cannot fall through to whatever is under the chips once they close */
 document.addEventListener('click',function(e){var c=e.target.closest&&e.target.closest('[data-dc]');if(!c)return;e.preventDefault();e.stopPropagation();if(!dcFor){dcClose();return}
   var el=dcFor,v=c.dataset.dc;dcClose();if(v==='pick'){try{el.showPicker()}catch(x){el.focus()}}else dcSet(el,v)},true);
@@ -2806,6 +2836,7 @@ document.addEventListener('click',function(e){
   if(act==='menu'){document.documentElement.classList.toggle('menu-open');return}
   if(act==='msearch'){go('search');render('search2');return}
   if(act==='capsheet'){openSheet();return}
+  if(act==='undolast'){undoLast();return}
   if(act==='agadd'){var ta=document.querySelector('[data-agadd="'+a.dataset.key+'"]');agAdd(a.dataset.key,ta?ta.value:'');return}
   if(act==='newmeeting'){newMeeting(ui.id);return}
   if(act==='fileall'){fileAll();return}
@@ -2892,10 +2923,10 @@ Promise.all([use('db'),use('user')]).then(function(r){
     var fail=function(){if(mode==='loading'){mode='local';root=null}toast('Lost the connection to your saved workspace. Reload the page.');schedule()};
     var ready=function(){return inkSeen&&KINDS.every(function(k){return seen[k]})};
     root.collection('ink').onSnapshot(function(snap){var changed=inkIntake(snap),first=!inkSeen;inkSeen=true;
-      if(mode==='loading'&&ready()){mode='saved';migrate();changed=true}if(changed||first)schedule()},fail);
+      if(mode==='loading'&&ready()){mode='saved';migrate();KINDS.forEach(function(k){Object.keys(store[k]).forEach(function(id){shadow[k+'/'+id]=docSnap(k,id)})});undoReady=true;changed=true}if(changed||first)schedule()},fail);
     KINDS.forEach(function(kind){root.collection(kind).onSnapshot(function(snap){
       var changed=intake(kind,snap),first=!seen[kind];seen[kind]=1;
-      if(mode==='loading'&&ready()){mode='saved';migrate();changed=true}
+      if(mode==='loading'&&ready()){mode='saved';migrate();KINDS.forEach(function(k){Object.keys(store[k]).forEach(function(id){shadow[k+'/'+id]=docSnap(k,id)})});undoReady=true;changed=true}
       if(changed||first)schedule()},fail)});
   });
 });
