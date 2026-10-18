@@ -794,6 +794,10 @@ li:hover > .aupdb,.aupdb:focus-visible{opacity:1}
 .rich th{background:var(--rail); font-weight:600}
 .rt .tb{display:none}
 .rt.intbl .tb{display:contents}
+.mxsum{display:flex; flex-wrap:wrap; gap:6px 14px; padding:8px 10px; border-top:1px solid var(--rule); font-size:.85rem}
+.mxsum .mx{color:var(--muted)} .mxsum .mx b{color:var(--ink); font-weight:600}
+.mxsum .best{color:var(--ink); background:var(--hit); padding:0 6px; border-radius:3px}
+.carry li{align-items:baseline}
 </style>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
 <script src="firebase-config.js"></script>
@@ -846,8 +850,11 @@ var CLOSEOUT=["All deliverables issued at final revision","Document register and
 var PRESITE=["Site induction current and PPE packed","Access, permits and escort arranged","Latest drawings and a list of questions ready","Camera or tablet charged","Know who you are meeting and their number","Someone knows where you are and when you will be back"];
 var MORECK=[{id:'onboard',name:'New starter onboarding',items:ONBOARD},{id:'presite',name:'Before a site visit',items:PRESITE},{id:'closeout',name:'Project close-out',items:CLOSEOUT}];
 var IFC=["Design criteria met and deviations approved in writing","Calculations checked and filed","Certified vendor data incorporated, or holds clearly marked","Interdisciplinary check complete and clashes resolved","HAZOP, safety in design and constructability actions closed","Drawings checked for dimensions, buildability, completeness and clarity","Signatures complete: designer, checker, discipline engineer, engineering manager, Project Manager","Client approval received and recorded"];
-var OPTREF={DIR:[['',''],['in','Incoming'],['out','Outgoing']],BDST:BDST,IMPST:IMPST,OUTCOME:[['',''],['proceed','Proceed'],['actions','Proceed with actions'],['again','Review again']]};
-function resolveOpts(o){if(o.optsRef)return OPTREF[o.optsRef]||[];if(o.choices)return [['','']].concat(o.choices.map(function(c){return [c,c]}));return typeof o.opts==='function'?o.opts():(o.opts||[])}
+var OPTREF={CHKST:[['',''],['unchecked','Unchecked'],['checked','Checked'],['super','Superseded']],
+  MEETINGS:function(){var cur=ui.v==='record'&&store.records[ui.id],mine=cur&&cur.d&&cur.d.who&&cur.d.who.made;return [['','']].concat(Object.keys(store.records).filter(function(id){var m=store.records[id];return m&&m.type==='meeting'&&(id===mine||!cur||!cur.project||m.project===cur.project)})
+    .sort(function(a,b){return (store.records[b].date||'').localeCompare(store.records[a].date||'')}).map(function(id){var m=store.records[id];return [id,(m.no?m.no+'  ':'')+fmtD(m.date)+'  '+(m.title||'Meeting')]}))},
+  DIR:[['',''],['in','Incoming'],['out','Outgoing']],BDST:BDST,IMPST:IMPST,OUTCOME:[['',''],['proceed','Proceed'],['actions','Proceed with actions'],['again','Review again']]};
+function resolveOpts(o){if(o.optsRef){var rf=OPTREF[o.optsRef];return typeof rf==='function'?rf():(rf||[])}if(o.choices)return [['','']].concat(o.choices.map(function(c){return [c,c]}));return typeof o.opts==='function'?o.opts():(o.opts||[])}
 var asItems=function(a){return a.map(function(t){return {t:t}})};
 
 /* ================= state and storage ================= */
@@ -1133,7 +1140,7 @@ var CKCOLS=[{k:'done',type:'check',w:'34px',label:'Done',rr:1},{k:'t',label:'Che
 var RGROUPS=[['notes','Notes and meetings',['meeting','call','general','sketch']],['project','Projects and design',['pcheck','decision','brief','options','calc','review','proposal']],
   ['site','Site',['site','siteday']],['people','People',['scheck','interview','handover']]];
 var FORMS={
-  meeting:{name:'Meeting notes',title:'Meeting',rows:[L(null,A('attendees','Attendees',2)),L(null,{kind:'agenda',k:'agenda',t:'Agenda and notes'}),L(null,ACTIONS()),L(null,FILES('Attachments'))]},
+  meeting:{name:'Meeting notes',title:'Meeting',rows:[L([1,1.6],KV('info','Meeting',[['time','Time'],['location','Location'],['next','Next meeting','date']],'96px'),[A('attendees','Attendees',2),A('apologies','Apologies',1)]),L(null,{kind:'agenda',k:'agenda',t:'Agenda and notes'}),L(null,ACTIONS()),L(null,FILES('Attachments'))]},
   general:{name:'General notes',title:'Subject',rows:[L(null,R('notes','Notes',null,360))]},
   sketch:{name:'Sketch notes',title:'Subject',link:'project',rows:[L(null,INK('sketch','Sketch',640)),L(null,R('notes','Notes',null,120))]},
   pcheck:{name:'Project check-in',title:'With',link:'project',rows:[L(null,A('summary','Summary',2,'Shows in the record list')),
@@ -1143,14 +1150,14 @@ var FORMS={
     L([1,1],R('wins','Wins',null,90),R('challenges','Challenges',null,90)),L(null,R('priorities','Priorities',null,90)),L([1,1],R('now','Workload now',null,90),R('look','Workload lookahead',null,90)),
     L([1,1],R('support','Support and development',null,90),R('feedback','Feedback given and received',null,90)),L(null,ACTIONS())]},
   brief:{name:'Design brief',title:'Subject',link:'project',rows:[L(null,R('objective','Objective',null,90)),L(null,R('scope','Scope and battery limits',null,90)),
-    L(null,T('data','Key data',[{k:'item',label:'Item'},{k:'value',label:'Value and source',w:'1.5fr'}])),L([1,1],R('assume','Assumptions',null,90),R('exclude','Exclusions',null,90)),
-    L(null,R('codes','Codes and standards',null,90)),L(null,TICKS('questions','Open questions'))]},
+    L(null,T('data','Key data',[{k:'item',label:'Item',w:'1.2fr'},{k:'value',label:'Value'},{k:'unit',label:'Units',w:'.45fr'},{k:'src',label:'Source',w:'1.1fr'}],{wide:1})),L([1,1],R('assume','Assumptions',null,90),R('exclude','Exclusions',null,90)),
+    L(null,R('codes','Codes and standards',null,90)),L(null,T('questions','Open questions',[{k:'done',type:'check',w:'34px',label:'Done'},{k:'t',label:'Question',w:'2fr'},{k:'who',label:'Who',type:'who',w:'.7fr'},{k:'due',label:'Due',type:'date',w:'132px'}],{wide:1,feed:1,hint:'Questions with a Who or Due date show with your actions'}))]},
   options:{name:'Options comparison',title:'Decision',link:'project',rows:[L(null,R('question','Question and context',null,90)),
-    L(null,KV('names','Options or bidders',[['a','A'],['b','B'],['c','C'],['d','D']],'40px')),
-    L(null,T('criteria','Criteria',[{k:'c',label:'Criteria',w:'1.6fr'},{k:'w',label:'Weight',w:'.5fr'},{k:'a',label:'A'},{k:'b',label:'B'},{k:'c2',label:'C'},{k:'d',label:'D'}],{wide:1,hint:'Use the last row for the score or rank'})),
-    L(null,R('preferred','Preferred option and why',null,90)),L(null,TICKS('questions','Open questions and next steps'))]},
-  calc:{name:'Calc sheet',title:'Subject',link:'project',rows:[L(null,KV('who','Record',[['no','Calc no.'],['by','By'],['chk','Checked by']])),L(null,R('basis','Basis: purpose, codes, inputs, assumptions',null,90)),L(null,INK('hand','Hand calculation',520)),
-    L(null,T('lines','Calculation',[{k:'ref',label:'Ref',w:'.4fr'},{k:'work',label:'Working',type:'area',w:'2fr'},{k:'result',label:'Result',w:'.7fr'}],{wide:1}))]},
+    L(null,T('optlist','Options or bidders',[{k:'t',label:'Option'}],{nohead:1,simple:1,hint:'Each one becomes a scoring column'})),
+    L(null,T('criteria','Scoring',[{k:'c',label:'Criteria'}],{wide:1,matrix:1,hint:'Score each option, for example 1 to 5. A blank weight counts as 1.'})),
+    L(null,R('preferred','Preferred option and why',null,90)),L(null,T('questions','Open questions and next steps',[{k:'done',type:'check',w:'34px',label:'Done'},{k:'t',label:'Question or next step',w:'2fr'},{k:'who',label:'Who',type:'who',w:'.7fr'},{k:'due',label:'Due',type:'date',w:'132px'}],{wide:1,feed:1}))]},
+  calc:{name:'Calc sheet',title:'Subject',link:'project',rows:[L(null,KV('who','Record',[['no','Calc no.'],['by','By'],['chk','Checked by'],['chkon','Checked on','date'],['chkst','Check status','select','CHKST']])),L(null,R('basis','Basis: purpose, codes, inputs, assumptions',null,90)),L(null,INK('hand','Hand calculation',520)),
+    L(null,T('lines','Calculation',[{k:'ref',label:'Ref',w:'.4fr'},{k:'work',label:'Working',type:'area',w:'2fr'},{k:'result',label:'Result',w:'.7fr'},{k:'unit',label:'Units',w:'.45fr'}],{wide:1}))]},
   review:{name:'Design review record',title:'Review',link:'project',rows:[L(null,KV('info','Review',[['type','Review type'],['docs','Documents and revision'],['attendees','Attendees'],['outcome','Outcome','select','OUTCOME'],['chair','Chair']],'150px')),
     L(null,T('comments','Comments',[{k:'ref',label:'Ref (drawing, tag)',w:'.7fr'},{k:'comment',label:'Comment',type:'area',w:'2fr'},{k:'action',label:'Action or response',type:'area',w:'1.3fr'},{k:'who',label:'Who',w:'.5fr'},{k:'closed',label:'Closed',type:'check',w:'60px'}],{wide:1})),L(null,FILES('Marked-up drawings and files'))]},
   site:{name:'Site visit and inspection',title:'Location or vendor',link:'project',rows:[L(null,KV('info','Visit',[['purpose','Purpose'],['present','Present']])),
@@ -1159,7 +1166,7 @@ var FORMS={
   call:{name:'Phone call',title:'With',rows:[L(null,KV('info','Call',[['dir','Direction','select','DIR'],['due','Follow up by','date']])),L(null,A('summary','Summary',2,'Shows in the record list')),L(null,R('notes','Notes',null,160)),L(null,ACTIONS())]},
   decision:{name:'Decision record',title:'Decision',link:'project',rows:[L(null,A('summary','What was decided',2,'Shows in the record list')),L(null,R('context','Context and why a decision was needed',null,90)),
     L(null,T('opts','Options considered',[{k:'opt',label:'Option',w:'1.2fr'},{k:'pro',label:'For',type:'area',w:'1.4fr'},{k:'con',label:'Against',type:'area',w:'1.4fr'}],{wide:1})),
-    L([1.3,1],R('why','Why this option',null,90),KV('who','Sign-off',[['by','Decided by'],['with','Consulted'],['review','Review by','date']])),L(null,ACTIONS())]},
+    L([1.3,1],R('why','Why this option',null,90),KV('who','Details',[['made','Made in','select','MEETINGS'],['by','Decided by'],['with','Consulted'],['review','Review by','date']])),L(null,ACTIONS())]},
   siteday:{name:'Site diary',title:'Day',link:'project',rows:[L(null,KV('cond','Conditions',[['weather','Weather'],['ground','Ground conditions'],['hours','Hours worked']])),
     L(null,T('onsite','On site',[{k:'crew',label:'Contractor or crew',w:'1.3fr'},{k:'n',label:'Headcount',type:'num',w:'.5fr'},{k:'work',label:'Work done',type:'area',w:'2fr'}],{wide:1})),
     L(null,R('issues','Issues, delays, visitors and instructions',null,90)),L(null,FILES('Photos')),L(null,ACTIONS())]},
@@ -1240,8 +1247,16 @@ function formGroups(){var ck=recName('checklist'),seen={},out=[];
 function formOpts(){return [].concat.apply([],formGroups().map(function(g){return g.items}))}
 function formOptsOld(){var ck=recName('checklist');return Object.keys(FORMS).filter(function(k){return k!=='checklist'&&formOn(k)}).map(function(k){return [k,recName(k)]})
   .concat(templates().map(function(t,i){return t.off?null:['checklist:'+i,ck+': '+(t.name||'Untitled')]}).filter(Boolean),formOn('checklist')?[['checklist',ck+': blank']]:[]).concat(pages('form').filter(function(p){return !p.off}).map(function(p){return ['c_'+p.id,p.name||'Custom form']}))}
+function lastMeeting(id){var r=store.records[id];if(!r)return null;var best=null;
+  Object.keys(store.records).forEach(function(o){var m=store.records[o];if(o===id||!m||m.type!=='meeting'||(m.project||'')!==(r.project||''))return;
+    if((m.date||'')<(r.date||'')||((m.date||'')===(r.date||'')&&(m.ts||0)<(r.ts||0))){if(!best||(m.date||'')>(store.records[best].date||'')||((m.date||'')===(store.records[best].date||'')&&(m.ts||0)>(store.records[best].ts||0)))best=o}});return best}
+function carried(id){var lm=lastMeeting(id);if(!lm)return null;var m=store.records[lm],rows=[];((m.d||{}).actions||[]).forEach(function(a,i){if(a&&a.t&&!a.done)rows.push({a:a,i:i})});return rows.length?{id:lm,m:m,rows:rows}:null}
+function carriedBox(id){var c=carried(id);if(!c)return '';
+  return '<div class="g">'+box('Open from the last meeting',
+    '<p class="meta" style="margin:0 0 6px">From <button class="link" data-go="record" data-id="'+c.id+'">'+esc((c.m.no?c.m.no+' ':'')+(c.m.title||'Meeting'))+'</button>, '+esc(fmtL(c.m.date))+'. Ticking one closes it there.</p><ul class="list carry">'
+    +c.rows.map(function(x){var k='records|'+c.id+'|d.actions|'+x.i+'|done';return '<li><label class="ptck"><input type="checkbox" data-l="'+k+'" data-k="'+k+'" data-rr="1" aria-label="Done"> '+esc(x.a.t)+'</label><span class="k">'+esc([x.a.who,x.a.due?fmtD(x.a.due)+(x.a.due<today()?' (overdue)':''):''].filter(Boolean).join(', '))+'</span></li>'}).join('')+'</ul>')+'</div>'}
 function newMeeting(pid){var last=Object.keys(store.records).map(function(id){return store.records[id]}).filter(function(r){return r.type==='meeting'&&r.project===pid}).sort(function(a,b){return (b.date||'').localeCompare(a.date||'')||(b.ts||0)-(a.ts||0)})[0];
-  var rid=newRecord('meeting',pid,''),r=store.records[rid];r.d.agenda=[{h:'',notes:''}];if(last&&last.d&&last.d.attendees)r.d.attendees=last.d.attendees;save('records',rid,true);
+  var rid=newRecord('meeting',pid,''),r=store.records[rid];r.d.agenda=[{h:'',notes:''}];if(last&&last.d&&last.d.attendees)r.d.attendees=last.d.attendees;if(last&&last.d&&last.d.info){r.d.info={time:last.d.info.time||'',location:last.d.info.location||''};if(last.d.info.next&&last.d.info.next>=r.date)r.date=last.d.info.next}save('records',rid,true);
   if(DEVNAME==='iPad')inkOpen['records|'+rid+'|d.agenda.0.notes']=true;go('record',rid);render('records|'+rid+'|title');
   toast(last&&last.d&&last.d.attendees?'New meeting notes, with attendees from the last meeting':'New meeting notes for this project')}
 function newRecord(type,project,person){var r={type:type,title:'',date:today(),project:project||'',person:person||'',ts:Date.now(),d:{}};
@@ -1283,7 +1298,20 @@ function internalProject(name){var n=String(name||'').trim().toLowerCase();if(!n
   if(hit)return hit;var p=newProject(name);p.scope='internal';p.ptype='internal';p.isNew=false;return put('projects',newId(),p)}
 function projOrder(){var s=projSplit();return s.ext.concat(s.int)}
 function peopleOpts(){return [['','None']].concat(sorted('people').map(function(x){return [x.id,x.d.name||'Unnamed']}))}
-var colsOf=function(b,doc){return b.weeks?weekCols((doc||{}).start,b.weeks.first,b.weeks.label):(b.cols||[])};
+var OKEYS=['a','b','c2','d'];
+function mxOpts(doc){var d=doc&&(doc.d||doc)||{},L=d.optlist;
+  if(!Array.isArray(L)){var n=d.names||{};L=OKEYS.map(function(k){return {t:n[k==='c2'?'c':k]||'',k:k}}).filter(function(x,i){return x.t||i<2});d.optlist=L}
+  var used={};L.forEach(function(x){if(x&&x.k)used[x.k]=1});L.forEach(function(x,i){if(x&&!x.k){var k=OKEYS[i]&&!used[OKEYS[i]]?OKEYS[i]:null,j=4;while(!k){if(!used['o'+j])k='o'+j;j++}x.k=k;used[k]=1}});
+  return L.filter(function(x){return x&&String(x.t||'').trim()})}
+function mxCols(doc){return [{k:'c',label:'Criteria',w:'1.6fr'},{k:'w',label:'Weight',w:'.5fr'}].concat(mxOpts(doc).map(function(o){return {k:o.k,label:o.t,w:'.6fr'}}))}
+function mxScore(doc,rows){var os=mxOpts(doc),num=function(v){var n=parseFloat(String(v==null?'':v).replace(/,/g,''));return isNaN(n)?null:n};
+  var res=os.map(function(o){var t=0,any=false;(rows||[]).forEach(function(r){var sc=r&&num(r[o.k]);if(sc==null)return;var w=num(r.w);t+=(w==null?1:w)*sc;any=true});return {k:o.k,t:o.t,tot:any?Math.round(t*100)/100:null}});
+  var sc=res.filter(function(x){return x.tot!=null}).map(function(x){return x.tot}).sort(function(a,b){return b-a});
+  res.forEach(function(x){x.rank=x.tot==null?null:sc.indexOf(x.tot)+1});return res}
+var ORD=function(n){return n+(n%100>10&&n%100<14?'th':['th','st','nd','rd'][n%10]||'th')};
+function mxSum(doc,rows){var r=mxScore(doc,rows);if(!r.some(function(x){return x.tot!=null}))return '';
+  return '<div class="mxsum">'+r.map(function(x){return '<span class="mx'+(x.rank===1?' best':'')+'"><b>'+esc(x.t)+'</b> '+(x.tot==null?'not scored':x.tot+' \u00B7 '+ORD(x.rank))+'</span>'}).join('')+'</div>'}
+var colsOf=function(b,doc){return b.matrix?mxCols(doc):b.weeks?weekCols((doc||{}).start,b.weeks.first,b.weeks.label):(b.cols||[])};
 function foldInfo(doc,p,b){var v=get(doc,p);
   if(b.kind==='agenda'){var na=Array.isArray(v)?v.length:0;return na?na+(na===1?' item':' items'):'Empty'}
   if(b.kind==='table'||b.kind==='gantt'||b.kind==='files'){var n=Array.isArray(v)?v.filter(function(r){return !blank(r)}).length:0;return n?n+(b.kind==='files'?(n===1?' file':' files'):(n===1?' row':' rows')):'Empty'}
@@ -1311,7 +1339,7 @@ function rBox(kind,id,base,b){var p=(b.abs?'':base)+b.k,doc=store[kind][id],fk=k
   if(b.kind==='agenda')return agendaBox(kind,id,p,b,fk);
   if(b.kind==='files')return box(b.t,filesBox(kind,id,p),b.hint,'',b.h,fk);
   if(b.kind==='ink')return box(b.t,inkPad(kind,id,p,b.t,b.ih)+(get(doc,p+'_txt')!=null?'<div class="tr" style="--cols:1fr">'+f(kind,id,p+'_txt',{type:'area',rows:2,label:'Typed version of '+b.t,ph:'Typed version'})+'</div>':''),b.hint,'',b.h,fk);
-  return box(b.t,table(kind,id,p,colsOf(b,doc),b),b.hint,b.weeks?startCtl(kind,id):'',b.h,fk)}
+  return box(b.t,table(kind,id,p,colsOf(b,doc),b)+(b.matrix?mxSum(doc,get(doc,p)):''),b.hint,b.weeks?startCtl(kind,id):'',b.h,fk)}
 function vis(r){var out=[];(r.cols||[]).forEach(function(c,i){var b=(c.b||[]).filter(function(x){return !x.hidden});if(b.length)out.push({b:b,w:(r.w&&r.w[i])||1})});return out}
 var canHide=function(kind){return kind==='projects'||kind==='people'};
 function secKey(base,b){return (b.abs?'':base)+b.k}
@@ -1337,7 +1365,7 @@ function isForm(lid){return lid.indexOf('f_')===0||pages('form').some(function(p
 function hasKey(lay,k){var hit=false;(lay.rows||[]).forEach(function(r){r.cols.forEach(function(c){c.b.forEach(function(b){if(b.k===k)hit=true})})});(lay.removed||[]).forEach(function(b){if(b.k===k)hit=true});return hit}
 function newKinds(lid,lay){var a=NEWKINDS.slice();if(lid==='dash'){[['gsched','Schedule across projects'],['done','Completed this week'],['attention','Needs attention'],['openacts','Actions'],['bdlist','Proposals and BD']].forEach(function(x){if(!hasKey(lay,'_'+x[0]))a.push(['sp:'+x[0],'Built-in: '+x[1]])})}layouts().blocks.forEach(function(k,i){a.push(['blk:'+i,'Your block: '+(k.name||'Untitled')])});if(isForm(lid)){if(!hasKey(lay,'actions'))a.push(['actions','Actions (these feed the Actions page)']);if(!hasKey(lay,'summary'))a.push(['summary','Summary line (shows in record lists)'])}return a}
 var LOCKED={dash:['top3'],sheet:['sched','risks','changes','vendor'],person:['sched','plan','reg','checkins'],bd:['pipeline'],office:['items']};
-function locked(lid,b){return b.kind==='special'||b.kind==='gantt'||!!b.weeks||(LOCKED[lid]||[]).indexOf(b.k)>=0||(isForm(lid)&&(b.k==='actions'||b.k==='summary'))}
+function locked(lid,b){return b.matrix||b.kind==='special'||b.kind==='gantt'||!!b.weeks||(LOCKED[lid]||[]).indexOf(b.k)>=0||(isForm(lid)&&(b.k==='actions'||b.k==='summary'))}
 function layoutInfo(lid){var N={dash:['Dashboard','this page'],sheet:['Project sheet','every project'],wiki:['Project wiki','every project'],person:['Person sheet','every person'],bd:['Business development','this page'],office:['Team','this page']};
   if(N[lid])return N[lid];if(lid.indexOf('pt_')===0){var pt=ptypes().filter(function(t){return 'pt_'+t.id===lid})[0];return [(pt&&pt.name||'Project type')+' sheet','every '+(pt&&pt.name||'')+' project']}
   if(lid.indexOf('own:')===0){var op=lid.split(':'),od=store[op[1]][op[2]]||{};return ['extra sections','only '+(od.name||'this one')+', below the shared layout']}
@@ -1466,7 +1494,9 @@ function dated(){var out=[];
   sorted('people').forEach(function(x){(x.d.plan||[]).forEach(function(r){if(r.by&&!r.done)out.push({d:r.by,t:(r.goal||'Development goal')+' ('+(x.d.name||'person')+')',go:{v:'person',id:x.id}})});
     if(x.d.reg&&x.d.reg.next)out.push({d:x.d.reg.next,t:'Plan review ('+(x.d.name||'person')+')',go:{v:'person',id:x.id}})});
   allActions().forEach(function(a){if(a.due&&!a.done)out.push({d:a.due,t:a.t,go:a.go||{v:'actions'},bind:a.bind,who:a.who,dueBind:a.dueBind,kind:a.kind})});
-  Object.keys(store.records).forEach(function(rid){var r=store.records[rid],inf=r&&r.d&&r.d.info;if(r&&r.type==='call'&&inf&&inf.due)out.push({d:inf.due,t:'Follow up: '+(r.title||'phone call'),go:{v:'record',id:rid}})});
+  Object.keys(store.records).forEach(function(rid){var r=store.records[rid],inf=r&&r.d&&r.d.info;if(r&&r.type==='call'&&inf&&inf.due)out.push({d:inf.due,t:'Follow up: '+(r.title||'phone call'),go:{v:'record',id:rid}});
+    if(r&&r.type==='meeting'&&inf&&inf.next&&inf.next>=today()&&!Object.keys(store.records).some(function(o){var m=store.records[o];return o!==rid&&m&&m.type==='meeting'&&m.project===r.project&&m.date&&m.date>(r.date||'')}))out.push({d:inf.next,t:'Next meeting: '+(r.title||'meeting'),go:{v:'record',id:rid}});
+    var wh=r&&r.d&&r.d.who;if(r&&r.type==='decision'&&wh&&wh.review)out.push({d:wh.review,t:'Review decision: '+(r.title||'decision'),go:{v:'record',id:rid}})});
   (single('bd').pipeline||[]).forEach(function(r){if(r.due&&r.status!=='won'&&r.status!=='lost')out.push({d:r.due,t:'BD: '+(r.opp||'opportunity'),go:{v:'bd'}})});
   return out.sort(function(a,b){return a.d<b.d?-1:a.d>b.d?1:0})}
 function keyDates(){var out=[],t=today();(single('dash').keydates||[]).forEach(function(x,i){if(x&&x.d&&x.t)out.push({d:x.d,t:x.t,kind:'kd',i:i})});
@@ -2076,7 +2106,7 @@ V.record=function(){
     +hfields('records',id,(function(){var c=rtConf(r.type),H=[];if(c.num||r.no)H.push(['no','No.',.55]);H.push(['title',F.title,1.6],['date','Date',.8,'date'],['project','Project',1,'select',projOpts],['person','Person',1,'select',peopleOpts]);
       if(c.status||r.status)H.push(['status','Status',.6,'select',[['','\u2013'],['draft','Draft'],['final','Final']]]);return H})())
     +(rtConf(r.type).num&&!r.no?'<p class="unfnote nop">No number yet. <button class="mini" data-act="recnum" data-id="'+id+'">Give it the next number</button></p>':'')
-    +(!r.project&&!r.person&&!r.filed?'<p class="unfnote nop">In your inbox until you choose a project or person. <button class="mini" data-act="keepunf" data-id="'+id+'">Keep unfiled</button></p>':'')+rRows('records',id,'d.',F.rows);
+    +(!r.project&&!r.person&&!r.filed?'<p class="unfnote nop">In your inbox until you choose a project or person. <button class="mini" data-act="keepunf" data-id="'+id+'">Keep unfiled</button></p>':'')+(r.type==='meeting'?carriedBox(id):'')+rRows('records',id,'d.',F.rows);
 };
 V.search=function(){var res=search(ui.q);
   return '<div class="head"><h1>Search</h1></div><input type="search" class="bigsearch" data-search="1" data-k="search2" value="'+esc(ui.q)+'" placeholder="Search everything" aria-label="Search everything">'+(ui.q.trim().length<2?'<p class="empty">Type at least two letters in the search box.</p>':
@@ -2155,7 +2185,10 @@ function mBox(doc,base,b){if(b.abs)base='';var v=get(doc,base+b.k);
   if(b.kind==='gantt')return {t:b.t,kind:'table',min:1,cols:[{label:'Task',w:1.6},{label:'Dates',w:1.2},{label:'Who',w:.7},{label:'',w:.2,type:'check'}],rows:(v||[]).filter(function(r){return r&&r.label}).map(function(r){return [r.label,gRange(r),r.who||'',!!r.done]})};
   if(b.kind==='files')return {t:b.t,kind:'files',items:(v||[]).map(function(x){return {id:x.id,name:x.name,type:x.type,url:x.url,img:isImg(x)&&!!x.url}})};
   if(b.kind==='kv')return {t:b.t,kind:'kv',items:(b.items||[]).map(function(it){return [it.l,cellText(it,(v||{})[it.k])]})};
-  var cols=colsOf(b,doc),fl=typeof b.flag==='string'?FLAGS[b.flag]:null;return {t:b.t,kind:'table',min:b.fixed||2,cols:cols.map(function(c){return {label:b.nohead?'':(c.head==null?(c.label||''):c.head),w:colW(c),type:c.type}}),rows:(v||[]).map(function(r){var late=fl&&fl(r);return cols.map(function(c){var x=cellText(c,r[c.k]);return late&&c.type==='date'&&x?[{t:x+' (overdue)',s:'warn'}]:x})}).concat((function(){var t=b.fixed?null:totalsOf(cols,v||[]);return t&&(v||[]).length?[t.map(function(x){return x?[{t:x,s:'name'}]:''})]:[]})())}}
+  var cols=colsOf(b,doc),fl=typeof b.flag==='string'?FLAGS[b.flag]:null;var mo={t:b.t,kind:'table',min:b.fixed||2,cols:cols.map(function(c){return {label:b.nohead?'':(c.head==null?(c.label||''):c.head),w:colW(c),type:c.type}}),rows:(v||[]).map(function(r){var late=fl&&fl(r);return cols.map(function(c){var x=cellText(c,r[c.k]);return late&&c.type==='date'&&x?[{t:x+' (overdue)',s:'warn'}]:x})}).concat((function(){var t=b.fixed?null:totalsOf(cols,v||[]);return t&&(v||[]).length?[t.map(function(x){return x?[{t:x,s:'name'}]:''})]:[]})())};
+  if(b.matrix){var ms=mxScore(doc,v);if(ms.some(function(x){return x.tot!=null}))mo.rows=mo.rows.concat([[[{t:'Weighted total',s:'name'}],''].concat(ms.map(function(x){return x.tot==null?'':[{t:String(x.tot),s:'name'}]})),
+    [[{t:'Rank',s:'name'}],''].concat(ms.map(function(x){return x.rank?[{t:ORD(x.rank)+(x.rank===1?' (preferred)':''),s:'name'}]:''}))])}
+  return mo}
 function mRows(doc,base,rows){rows=unhidden(doc,base,rows);return (rows||[]).map(function(r){var cs=vis(r);return {w:cs.map(function(c){return c.w}),cols:cs.map(function(c){return c.b.reduce(function(a,b){var m=mBox(doc,base,b);return a.concat(Array.isArray(m)?m:[m])},[]).filter(Boolean)})}})}
 function modelDash(){return {title:'Dashboard',sub:'As at '+fmtL(today()),rows:mRows(single('dash'),'',getLayout('dash').rows)}}
 function currentModel(){var v=ui.v,d,nm;
@@ -2181,9 +2214,9 @@ function currentModel(){var v=ui.v,d,nm;
   if(v==='record'){d=store.records[ui.id];var F=formDef(d.type),p=store.projects[d.project],e=store.people[d.person],inf=(d.d||{}).info||{};
     var meta=[['No.',d.no],['Date',fmtL(d.date)+(inf.time?', '+inf.time:'')],['Project',p?p.name:''],['Person',e?e.name:''],['Location',inf.location]].filter(function(m){return m[1]});
     var acts=[],rest=(F.rows||[]).map(function(rw){var o={};for(var z in rw)o[z]=rw[z];o.cols=(rw.cols||[]).map(function(c){return {b:(c.b||[]).filter(function(b){if(b.k==='actions'&&b.kind==='table'){acts.push(b);return false}return true})}});return o}).filter(function(rw){return rw.cols.some(function(c){return c.b.length})});
-    if(acts.length)rest.push({cols:[{b:acts}]});
+    if(acts.length)rest.push({cols:[{b:acts}]});var cr=d.type==='meeting'&&carried(ui.id);
     var dr=d.status==='draft',st=d.status?(dr?'DRAFT':'Final'):'';
-    return {fname:d.no?fileName(d.no+(d.title?' - '+d.title:'')):'',title:d.title||F.name,kicker:F.name,sub:st,draft:dr,runhead:[d.title||F.name,d.no,dr?'DRAFT':''].filter(Boolean).join('  \u00B7  '),meta:meta,rows:mRows(d,'d.',rest)}}
+    return {fname:d.no?fileName(d.no+(d.title?' - '+d.title:'')):'',title:d.title||F.name,kicker:F.name,sub:st,draft:dr,runhead:[d.title||F.name,d.no,dr?'DRAFT':''].filter(Boolean).join('  \u00B7  '),meta:meta,rows:(cr?[{w:[1],cols:[[{t:'Open from the last meeting'+(cr.m.no?' ('+cr.m.no+')':''),kind:'table',min:1,cols:[{label:'Action',w:2},{label:'Who',w:.7},{label:'Due',w:.8}],rows:cr.rows.map(function(x){return [x.a.t,x.a.who||'',fmtL(x.a.due)]})}]]}]:[]).concat(mRows(d,'d.',rest))}}
   return null}
 function recordsModel(filter){var recs=Object.keys(store.records).map(function(id){return store.records[id]}).filter(filter).sort(function(a,b){return (a.date||'')<(b.date||'')?1:-1});
   return {t:'Records',kind:'table',cols:[{label:'Date',w:.6},{label:'Form',w:.9},{label:'Title',w:1.2},{label:'Summary',w:2}],rows:recs.map(function(r){return [fmtL(r.date),formDef(r.type).name,r.title||'',recSummary(r)]})}}
