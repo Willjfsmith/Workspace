@@ -855,6 +855,8 @@ li:hover > .aupdb,.aupdb:focus-visible{opacity:1}
 .inkstage.narrow{background:var(--rail)}
 .inkstage.narrow canvas.ink{margin:0 auto; background:var(--sheet,var(--board)); box-shadow:0 0 0 1px var(--rule)}
 .rich img{display:block; max-width:100%; height:auto; margin:6px 0; border:1px solid var(--rule); border-radius:3px; cursor:zoom-in}
+.rt .rtpic{position:relative; overflow:hidden; display:inline-flex; align-items:center; cursor:pointer; border:1px solid var(--rule); border-radius:3px; padding:1px 8px; font-size:.78rem; background:var(--board)}
+.rt .rtpic input{position:absolute; inset:0; opacity:0; cursor:pointer}
 </style>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
 <script src="firebase-config.js"></script>
@@ -1198,7 +1200,7 @@ function cleanHtml(s){s=String(s||'');if(s.indexOf('<')<0)return esc(s).replace(
     else if(c.nodeType!==3)n.removeChild(c)})})(t.content);
   return t.innerHTML}
 function rich(kind,id,path,label){var k=kind+'|'+id+'|'+path,ik=get(store[kind][id],path+'_ink'),open=inkOpen[k]==null?!!(ik&&ik.s&&ik.s.length):inkOpen[k];
-  return '<div class="rt" role="toolbar" aria-label="Formatting"><button data-rich="bold" aria-label="Bold"><b>B</b></button><button data-rich="italic" aria-label="Italic"><i>I</i></button><button data-rich="heading" aria-label="Heading" title="Heading">H</button><button data-rich="insertUnorderedList" aria-label="Bulleted list">List</button><button data-rich="insertOrderedList" aria-label="Numbered list" title="Numbered list">1.</button><button data-rich="table" aria-label="Insert table" title="Insert a table. Tab moves to the next cell. Paste from Excel also makes a table.">Table</button><span class="tb"><button data-rich="trow" title="Add a row below">+ Row</button><button data-rich="tcol" title="Add a column to the right">+ Col</button><button data-rich="tdrow" title="Delete this row">\u2212 Row</button><button data-rich="tdcol" title="Delete this column">\u2212 Col</button><button data-rich="tdel" title="Remove the table">Remove table</button></span><button data-act="inktoggle" data-key="'+k+'" aria-pressed="'+open+'" title="Write by hand with a pencil, under the typed notes">Handwrite</button></div>'
+  return '<div class="rt" role="toolbar" aria-label="Formatting"><button data-rich="bold" aria-label="Bold"><b>B</b></button><button data-rich="italic" aria-label="Italic"><i>I</i></button><button data-rich="heading" aria-label="Heading" title="Heading">H</button><button data-rich="insertUnorderedList" aria-label="Bulleted list">List</button><button data-rich="insertOrderedList" aria-label="Numbered list" title="Numbered list">1.</button><button data-rich="table" aria-label="Insert table" title="Insert a table. Tab moves to the next cell. Paste from Excel also makes a table.">Table</button><span class="tb"><button data-rich="trow" title="Add a row below">+ Row</button><button data-rich="tcol" title="Add a column to the right">+ Col</button><button data-rich="tdrow" title="Delete this row">\u2212 Row</button><button data-rich="tdcol" title="Delete this column">\u2212 Col</button><button data-rich="tdel" title="Remove the table">Remove table</button></span><label class="rtpic" title="Add a photo or screenshot here. You can also paste one.">Photo<input type="file" accept="image/*" multiple data-richpic="'+k+'"></label><button data-act="inktoggle" data-key="'+k+'" aria-pressed="'+open+'" title="Write by hand with a pencil, under the typed notes">Handwrite</button></div>'
     +'<div class="rich'+(open?' short':'')+'" contenteditable="true" role="textbox" aria-multiline="true" aria-label="'+esc(label)+'" data-r="'+k+'">'+cleanHtml(get(store[kind][id],path))+'</div>'+(open?inkPad(kind,id,path+'_ink',label,380):'')}
 
 /* ================= declarative page layouts (drive both the screen and the PDF) ================= */
@@ -2997,6 +2999,8 @@ document.addEventListener('change',function(e){
   if(d.scope){var sp=store.projects[d.scope];if(!sp)return;
     if(el.value==='solo'){sp.solo={rows:clone(getLayout(sheetLid(sp)).rows)};save('projects',d.scope);ui.edit='solo:'+d.scope;render();toast('This project now has its own layout. Other projects are not affected.')}
     else{var was=sp.solo;delete sp.solo;save('projects',d.scope);ui.edit=sheetLid(sp);render();toast('Back on the shared layout',function(){sp.solo=was;save('projects',d.scope);ui.edit='solo:'+d.scope;render()})}return}
+  if(d.richpic){var rq=d.richpic.split('|'),rdoc=store[rq[0]]&&store[rq[0]][rq[1]],rfs=[].slice.call(el.files||[]);el.value='';if(!rdoc||!rfs.length)return;toast('Adding '+(rfs.length===1?'the photo':rfs.length+' photos'));
+    rfs.reduce(function(ch,f){return ch.then(function(){return richPic(f).then(function(r){setp(rdoc,rq[2],cleanHtml(get(rdoc,rq[2])||'')+'<div><img data-img="'+r.id+'"></div>');save(rq[0],rq[1]);render()})})},Promise.resolve()).catch(function(){toast('The photo could not be saved.')});return}
   if(d.fadd){addFilesDb(d.fadd,[].slice.call(el.files||[]));el.value='';return}
   if(d.phadd){addPhotos(d.phadd,[].slice.call(el.files||[]));el.value='';return}
   if(d.l&&el.type==='checkbox'){var q0=d.l.split('|');if(q0[4]==='done'){var a0=get(store[q0[0]][q0[1]]||{},q0[2]),r0=a0&&a0[+q0[3]];if(r0){r0.doneOn=el.checked?today():'';save(q0[0],q0[1])}}}
