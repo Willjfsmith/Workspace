@@ -843,6 +843,8 @@ li:hover > .aupdb,.aupdb:focus-visible{opacity:1}
 .rcard2:hover{border-color:var(--line); background:var(--hit)}
 .rcard2 b{font-weight:600; font-size:.88rem; white-space:nowrap; overflow:hidden; text-overflow:ellipsis}
 .rcard2 span{font-size:.75rem; color:var(--muted); white-space:nowrap; overflow:hidden; text-overflow:ellipsis}
+.escope{display:flex; align-items:center; gap:6px; font-size:.82rem}
+.escope select{font-weight:600}
 </style>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
 <script src="firebase-config.js"></script>
@@ -1015,7 +1017,7 @@ function regRows(arr){var ch=false;(arr||[]).forEach(function(r){if(!r||typeof r
     if('closed' in r){if(r.done==null)r.done=!!r.closed;delete r.closed;ch=true}if('photo' in r){if(!r.ref)r.ref=r.photo;delete r.photo;ch=true}});return ch}
 function regMigrate(){Object.keys(store.records).forEach(function(id){var r=store.records[id],d=r&&r.d;if(!d)return;var ch=false;
   if(r.type==='review')ch=regRows(d.comments)||ch;if(r.type==='site')ch=regRows(d.obs)||ch;if(ch)save('records',id,true)})}
-function migrate(){regMigrate();mergeLists();sketchOff();meetingAgendas();addChecklists();typeProjects();markOldFiled();moveChecks();Object.keys(store.records).forEach(function(id){var r=store.records[id];if(r&&'folder' in r){if(r.folder&&!r.project)r.project=internalProject(r.folder);delete r.folder;save('records',id,true)}});var dt=store.single.dash;if(dt&&Array.isArray(dt.top3)&&dt.top3.some(function(r){return r&&r.t})){dt.top3.forEach(function(r){if(r&&r.t)single('actions').list.push({t:r.t,pri:true,done:!!r.done,kind:''})});dt.top3=[];save('single','dash',true);save('single','actions',true)}Object.keys(store.projects).forEach(function(id){if(convSched(store.projects[id]))save('projects',id,true)});var d=store.single.dash;if(d&&Array.isArray(d.props)&&d.props.length){var bd=single('bd');
+function migrate(){regMigrate();moveIntPages();mergeLists();sketchOff();meetingAgendas();addChecklists();typeProjects();markOldFiled();moveChecks();Object.keys(store.records).forEach(function(id){var r=store.records[id];if(r&&'folder' in r){if(r.folder&&!r.project)r.project=internalProject(r.folder);delete r.folder;save('records',id,true)}});var dt=store.single.dash;if(dt&&Array.isArray(dt.top3)&&dt.top3.some(function(r){return r&&r.t})){dt.top3.forEach(function(r){if(r&&r.t)single('actions').list.push({t:r.t,pri:true,done:!!r.done,kind:''})});dt.top3=[];save('single','dash',true);save('single','actions',true)}Object.keys(store.projects).forEach(function(id){if(convSched(store.projects[id]))save('projects',id,true)});var d=store.single.dash;if(d&&Array.isArray(d.props)&&d.props.length){var bd=single('bd');
     d.props.forEach(function(r){if(r&&r.t)bd.pipeline.push({opp:r.t})});delete d.props;save('single','dash',true);save('single','bd',true)}}
 function status(){var el=document.getElementById('status');if(!el)return;
   el.className=mode==='local'?'warn':'';
@@ -1376,6 +1378,7 @@ function ptypesBox(){var L=ptypes(),ct=pages('project'),TB=[['wiki','Project wik
     +'<div class="head"><button class="btn" data-act="addptype">Add a project type</button></div>'}
 function ptypeOpts(){return ptypes().map(function(t){return [t.id,t.name||'Untitled type']})}
 function sheetLid(p){var t=ptypeOf(p);return t&&t.own?'pt_'+t.id:'sheet'}
+function sheetRows(d){return d&&d.solo&&Array.isArray(d.solo.rows)?d.solo.rows:getLayout(sheetLid(d)).rows}
 function ptDefault(lid){if(lid==='pt_personal')return {rows:[L([1,1],A('goal','Goal',3),A('why','Why it matters',3)),L(null,TICKS('plan','Plan')),L(null,SP('pacts','Actions')),L(null,{kind:'gantt',k:'sched',t:'Schedule'}),L(null,R('notes','Notes',null,160)),L(null,LIB())]};
   return {rows:[L(null,SP('pacts','Actions')),L(null,{kind:'gantt',k:'sched',t:'Schedule'}),L(null,R('notes','Notes',null,160))]}}
 function tabOn(p,k){var t=ptypeOf(p);return k==='sheet'||!(t&&t.offTabs&&t.offTabs[k])}
@@ -1384,6 +1387,15 @@ function projSplit(arch){var a=sorted('projects',arch);return {ext:a.filter(func
 function projGroups(none){var s=projSplit(),m=function(x){return [x.id,x.d.name||'Untitled project']};return [['',none]].concat(s.int.length?[{group:'External projects',items:s.ext.map(m)},{group:'Internal',items:s.int.map(m)}]:s.ext.map(m))}
 function projOpts(){return projGroups('None')}
 var SCOPES=[['','External'],['internal','Internal']];
+function intId(name){var n=name.toLowerCase();return Object.keys(store.projects).filter(function(id){var p=store.projects[id];return isInt(p)&&!p.archived&&String(p.name||'').trim().toLowerCase()===n})[0]||''}
+function intMoved(){return !!(store.single.settings&&store.single.settings.intMoved)}
+/* Business development and Team pages move into internal projects, each with its own sheet layout holding what the page had */
+function moveIntPages(){var st=single('settings');if(st.intMoved)return;
+  [['bd','Business development'],['office','Team']].forEach(function(z){var pid=internalProject(z[1]),pj=store.projects[pid],src=store.single[z[0]]||{};if(!pj)return;
+    if(!pj.solo)pj.solo={rows:clone(getLayout(z[0]).rows)};Object.keys(src).forEach(function(k){if(/^(ts|at|updated|name|own|solo)$/.test(k))return;if(pj[k]==null||(Array.isArray(pj[k])&&!pj[k].length))pj[k]=clone(src[k])});save('projects',pid,true)});
+  st.intMoved=1;save('single','settings',true)}
+function bdDoc(){var id=intMoved()&&intId('business development');return id?{kind:'projects',id:id,d:store.projects[id]}:{kind:'single',id:'bd',d:single('bd')}}
+function teamDoc(){var id=intMoved()&&intId('team');return id?{kind:'projects',id:id,d:store.projects[id]}:{kind:'single',id:'office',d:single('office')}}
 function internalProject(name){var n=String(name||'').trim().toLowerCase();if(!n)return '';var hit=Object.keys(store.projects).filter(function(id){var p=store.projects[id];return isInt(p)&&!p.archived&&String(p.name||'').trim().toLowerCase()===n})[0];
   if(hit)return hit;var p=newProject(name);p.scope='internal';p.ptype='internal';p.isNew=false;return put('projects',newId(),p)}
 function projOrder(){var s=projSplit();return s.ext.concat(s.int)}
@@ -1457,14 +1469,16 @@ function isForm(lid){return lid.indexOf('f_')===0||pages('form').some(function(p
 function hasKey(lay,k){var hit=false;(lay.rows||[]).forEach(function(r){r.cols.forEach(function(c){c.b.forEach(function(b){if(b.k===k)hit=true})})});(lay.removed||[]).forEach(function(b){if(b.k===k)hit=true});return hit}
 function newKinds(lid,lay){var a=NEWKINDS.slice();if(lid==='dash'){[['gsched','Schedule across projects'],['done','Completed this week'],['attention','Needs attention'],['openacts','Actions'],['bdlist','Proposals and BD']].forEach(function(x){if(!hasKey(lay,'_'+x[0]))a.push(['sp:'+x[0],'Built-in: '+x[1]])})}layouts().blocks.forEach(function(k,i){a.push(['blk:'+i,'Your block: '+(k.name||'Untitled')])});if(isForm(lid)){if(!hasKey(lay,'actions'))a.push(['actions','Actions (these feed the Actions page)']);if(!hasKey(lay,'summary'))a.push(['summary','Summary line (shows in document lists)'])}return a}
 var LOCKED={dash:['top3'],sheet:['sched','risks','changes','vendor'],person:['sched','plan','reg','checkins'],bd:['pipeline'],office:['items']};
-function locked(lid,b){return b.matrix||b.kind==='special'||b.kind==='gantt'||!!b.weeks||(LOCKED[lid]||[]).indexOf(b.k)>=0||(isForm(lid)&&(b.k==='actions'||b.k==='summary'))}
-function layoutInfo(lid){var N={dash:['Dashboard','this page'],sheet:['Project sheet','every project'],wiki:['Project wiki','every project'],person:['Person sheet','every person'],bd:['Business development','this page'],office:['Team','this page']};
+function locked(lid,b){if(/^(solo:|pt_)/.test(lid))lid='sheet';return b.matrix||b.kind==='special'||b.kind==='gantt'||!!b.weeks||(LOCKED[lid]||[]).indexOf(b.k)>=0||(isForm(lid)&&(b.k==='actions'||b.k==='summary'))}
+function layoutInfo(lid){if(lid.indexOf('solo:')===0){var so=store.projects[lid.slice(5)]||{};return ['Project sheet','only '+(so.name||'this project')]}
+var N={dash:['Dashboard','this page'],sheet:['Project sheet','every project'],wiki:['Project wiki','every project'],person:['Person sheet','every person'],bd:['Business development','this page'],office:['Team','this page']};
   if(N[lid])return N[lid];if(lid.indexOf('pt_')===0){var pt=ptypes().filter(function(t){return 'pt_'+t.id===lid})[0];return [(pt&&pt.name||'Project type')+' sheet','every '+(pt&&pt.name||'')+' project']}
   if(lid.indexOf('own:')===0){var op=lid.split(':'),od=store[op[1]][op[2]]||{};return ['extra sections','only '+(od.name||'this one')+', below the shared layout']}
   if(lid.indexOf('f_')===0)return [(FORMS[lid.slice(2)]||{name:'Form'}).name,'every document of this type, old and new'];
   var pg=pages().filter(function(p){return 'c_'+p.id===lid})[0]||{};
   return [pg.name||'Untitled',pg.scope==='project'?'every project':pg.scope==='person'?'every person':pg.scope==='form'?'every document of this type':'this page']}
-function tgt(lid){if(lid.indexOf('own:')===0){var p=lid.split(':'),doc=store[p[1]][p[2]];if(!doc.own||!Array.isArray(doc.own.rows))doc.own={rows:[{cols:[{b:[]}]}]};return {kind:p[1],id:p[2],path:'own.',lay:doc.own,own:true}}
+function tgt(lid){if(lid.indexOf('solo:')===0){var sd=store.projects[lid.slice(5)];if(!sd.solo||!Array.isArray(sd.solo.rows))sd.solo={rows:clone(getLayout(sheetLid(sd)).rows)};return {kind:'projects',id:lid.slice(5),path:'solo.',lay:sd.solo,solo:true}}
+if(lid.indexOf('own:')===0){var p=lid.split(':'),doc=store[p[1]][p[2]];if(!doc.own||!Array.isArray(doc.own.rows))doc.own={rows:[{cols:[{b:[]}]}]};return {kind:p[1],id:p[2],path:'own.',lay:doc.own,own:true}}
   return {kind:'single',id:'layouts',path:'L.'+lid+'.',lay:editLayout(lid)}}
 function editLayout(lid){var S=layouts();if(!S.L[lid]){S.L[lid]=clone(DEFAULTS[lid]||(lid.indexOf('pt_')===0?ptDefault(lid):null)||{rows:[{cols:[{b:[]}]}]});save('single','layouts')}return S.L[lid]}
 function newBox(type){var k='s'+newId();
@@ -1490,7 +1504,9 @@ function editor(lid){
   var selb=function(path,v,list,label){var k=P+path;if(!list.some(function(o){return String(o[0])===String(v==null?'':v)}))list=list.concat([[v,'As set']]);
     return '<select class="ein" data-b="'+k+'" data-k="'+k+'" data-rr="1" aria-label="'+esc(label)+'">'+opts(list,v)+'</select>'};
   var btn=function(op,label,txt,dis){return '<button class="eb" data-lay="'+op+'" aria-label="'+esc(label)+'" title="'+esc(label)+'"'+(dis?' disabled':'')+'>'+txt+'</button>'};
-  var h='<div class="ebar"><b>Editing '+(TG.own?'':'the layout of ')+esc(info[0])+'</b><span>Changes apply to '+esc(info[1])+'. Removing a section hides its entries; it does not delete them.</span><span class="sp"></span>'
+  var scope='';if(ui.v==='project'&&ui.id&&(lid==='sheet'||lid.indexOf('pt_')===0||TG.solo)){var spd=store.projects[ui.id]||{},ptn=lid.indexOf('pt_')===0?(ptypeOf(spd).name||'type')+' projects':'projects';
+    scope='<label class="escope">Changes apply to <select class="ein" data-scope="'+ui.id+'" aria-label="Which projects this layout is for">'+opts([['all',lid.indexOf('pt_')===0?'Every '+(ptypeOf(spd).name||'')+' project':'Every project'],['solo','Only '+(spd.name||'this project')]],TG.solo?'solo':'all')+'</select></label>'}
+  var h='<div class="ebar"><b>Editing '+(TG.own?'':'the layout of ')+esc(info[0])+'</b>'+(scope||'<span>Changes apply to '+esc(info[1])+'.</span>')+'<span>Removing a section hides its entries; it does not delete them.</span><span class="sp"></span>'
     +(DEFAULTS[lid]&&!TG.own?'<button class="btn" data-act="layreset">'+(ui.confirm==='layreset'?'Confirm reset':'Reset to the original')+'</button>':'')+'<button class="btn pri" data-act="editdone">Done</button></div>';
   rows.forEach(function(r,ri){var nc=r.cols.length,empty=!r.cols.some(function(c){return c.b.length});
     h+='<div class="erow"><div class="erb"><b>Row '+(ri+1)+'</b><label>Columns <select class="ein" data-layc="cols|'+ri+'" aria-label="Number of columns in row '+(ri+1)+'">'+opts([[1,'1'],[2,'2'],[3,'3'],[4,'4']],nc)+'</select></label>'
@@ -1556,10 +1572,10 @@ function feedCols(b){var cols=b.cols||[],one=function(fn){return cols.filter(fn)
 /* every place a layout is filled in */
 function instances(){var out=[],P=pages('project'),E=pages('person');
   sorted('projects').forEach(function(x){var nm=x.d.name||'Project',add=function(base,rows,tab){out.push({kind:'projects',id:x.id,base:base,rows:rows,label:nm,go:{v:'project',id:x.id,tab:tab},project:x.id})};
-    add('',getLayout(sheetLid(x.d)).rows,'sheet');add('wiki.',getLayout('wiki').rows,'wiki');P.forEach(function(p){add('x.'+p.id+'.',getLayout('c_'+p.id).rows,'c_'+p.id)});if(x.d.own)add('',x.d.own.rows,'sheet')});
+    add('',sheetRows(x.d),'sheet');add('wiki.',getLayout('wiki').rows,'wiki');P.forEach(function(p){add('x.'+p.id+'.',getLayout('c_'+p.id).rows,'c_'+p.id)});if(x.d.own)add('',x.d.own.rows,'sheet')});
   sorted('people').forEach(function(x){var nm=x.d.name||'Person',add=function(base,rows,tab){out.push({kind:'people',id:x.id,base:base,rows:rows,label:nm,go:{v:'person',id:x.id,tab:tab},person:x.id})};
     add('',getLayout('person').rows,'sheet');E.forEach(function(p){add('x.'+p.id+'.',getLayout('c_'+p.id).rows,'c_'+p.id)});if(x.d.own)add('',x.d.own.rows,'sheet')});
-  [['bd','Business development'],['office','Office and internal'],['dash','Dashboard']].forEach(function(z){out.push({kind:'single',id:z[0],base:'',rows:getLayout(z[0]).rows,label:z[1],go:{v:z[0]}})});
+  [['bd','Business development'],['office','Office and internal'],['dash','Dashboard']].filter(function(z){return z[0]==='dash'||!intMoved()}).forEach(function(z){out.push({kind:'single',id:z[0],base:'',rows:getLayout(z[0]).rows,label:z[1],go:{v:z[0]}})});
   pages('page').forEach(function(p){out.push({kind:'single',id:'pg_'+p.id,base:'',rows:getLayout('c_'+p.id).rows,label:p.name||'Page',go:{v:'page',id:p.id}})});
   Object.keys(store.records).forEach(function(id){var r=store.records[id];out.push({kind:'records',id:id,base:'d.',rows:formDef(r.type).rows,label:recLabel(r),go:{v:'record',id:id},project:r.project,person:r.person,rec:true})});
   return out}
@@ -1600,7 +1616,7 @@ function dated(){var out=[];
   Object.keys(store.records).forEach(function(rid){var r=store.records[rid],inf=r&&r.d&&r.d.info;if(r&&r.type==='call'&&inf&&inf.due)out.push({d:inf.due,t:'Follow up: '+(r.title||'phone call'),go:{v:'record',id:rid}});
     if(r&&r.type==='meeting'&&inf&&inf.next&&inf.next>=today()&&!Object.keys(store.records).some(function(o){var m=store.records[o];return o!==rid&&m&&m.type==='meeting'&&m.project===r.project&&m.date&&m.date>(r.date||'')}))out.push({d:inf.next,t:'Next meeting: '+(r.title||'meeting'),go:{v:'record',id:rid}});
     var wh=r&&r.d&&r.d.who;if(r&&r.type==='decision'&&wh&&wh.review)out.push({d:wh.review,t:'Review decision: '+(r.title||'decision'),go:{v:'record',id:rid}})});
-  (single('bd').pipeline||[]).forEach(function(r){if(r.due&&r.status!=='won'&&r.status!=='lost')out.push({d:r.due,t:'BD: '+(r.opp||'opportunity'),go:{v:'bd'}})});
+  var bdd=bdDoc();(bdd.d.pipeline||[]).forEach(function(r){if(r.due&&r.status!=='won'&&r.status!=='lost')out.push({d:r.due,t:'BD: '+(r.opp||'opportunity'),go:bdd.kind==='projects'?{v:'project',id:bdd.id}:{v:'bd'}})});
   return out.sort(function(a,b){return a.d<b.d?-1:a.d>b.d?1:0})}
 function keyDates(){var out=[],t=today();(single('dash').keydates||[]).forEach(function(x,i){if(x&&x.d&&x.t)out.push({d:x.d,t:x.t,kind:'kd',i:i})});
   sorted('projects').forEach(function(p){(p.d.sched||[]).forEach(function(r){if(!r||!r.label)return;var f=r.from||r.to,e=r.to||r.from;if(!f)return;
@@ -1686,8 +1702,8 @@ var SPECIAL={
           +f('people',x.id,'dash.focus',{type:'area',label:'Focus',ph:'Focus'})+f('people',x.id,'dash.look',{type:'area',label:'Lookahead',ph:'Lookahead'})+f('people',x.id,'dash.notes',{type:'area',label:'Notes',ph:'Notes'})+mover('people',x.id,i,pe.length)+'</div>'}).join('')
         +'<div class="tr" style="--cols:1fr"><input class="in" data-add="people" data-k="add|people" placeholder="Add a person, then press Enter" aria-label="Add a person"></div></div></div>',b.hint,pe.length?'<button class="mini" data-act="clearticks">Clear check-ins</button>':'','',fk)},
     model:function(b){return {t:b.t,kind:'table',cols:[{label:'',w:.2,type:'check'},{label:'Name',w:1},{label:'Focus',w:1.2},{label:'Lookahead',w:1.2},{label:'Notes',w:1.2}],rows:sorted('people').map(function(x){var z=x.d.dash||{};return [!!z.checked,[{t:x.d.name||'Unnamed',s:'name'}],z.focus||'',z.look||'',z.notes||'']})}}},
-  bdlist:{web:function(b,fk){return box(b.t,table('single','bd','pipeline',[{k:'opp',label:'Opportunity'}],{nohead:1}),b.hint,'<button class="mini" data-go="bd">Open pipeline</button>','',fk)},
-    model:function(b){return {t:b.t,kind:'table',cols:[{label:'',w:1}],rows:(single('bd').pipeline||[]).map(function(r){return [r.opp||'']})}}}
+  bdlist:{web:function(b,fk){var bd=bdDoc();if(!Array.isArray(bd.d.pipeline))bd.d.pipeline=[];return box(b.t,table(bd.kind,bd.id,'pipeline',[{k:'opp',label:'Opportunity'}],{nohead:1}),b.hint,'<button class="mini" data-go="'+(bd.kind==='projects'?'project" data-id="'+bd.id:'bd')+'">Open pipeline</button>','',fk)},
+    model:function(b){return {t:b.t,kind:'table',cols:[{label:'',w:1}],rows:(bdDoc().d.pipeline||[]).map(function(r){return [r.opp||'']})}}}
 };
 function mover(kind,id,i,n){return '<div class="rc"><button data-move="'+kind+'|'+id+'|up" aria-label="Move up"'+(i===0?' disabled':'')+'>\u2191</button><button data-move="'+kind+'|'+id+'|down" aria-label="Move down"'+(i===n-1?' disabled':'')+'>\u2193</button></div>'}
 V.dash=function(){
@@ -1787,8 +1803,8 @@ function fileTo(i,where){var it=inboxItems(),x=it[i];if(!x||!String(x.t||'').tri
     msg=(where==='action'?'Filed as an action':'Filed in Actions as a '+KINDN[where==='change'?'change':where].toLowerCase())+(p?' on '+(p.name||'the project'):'')}
   else if(where==='note'){dd=single('dash');dd.notes=cleanHtml(dd.notes||'')+'<div>'+esc(pre+x.t)+'</div>';save('single','dash');msg='Added to general notes'}
   else if(where==='change'){(p.changes=p.changes||[]).push({date:today(),who:x.who||'',what:x.t});save('projects',x.p);msg='Added to the '+(p.name||'project')+' change log'}
-  else if(where==='bd'){single('bd').pipeline.push({opp:x.t,due:x.due||''});save('single','bd');msg='Added to the BD pipeline'}
-  else if(where==='office'){single('office').items.push({t:pre+x.t,who:x.who||'',due:x.due||''});save('single','office');msg='Added to team actions'}
+  else if(where==='bd'){var bq=bdDoc();(bq.d.pipeline=bq.d.pipeline||[]).push({opp:x.t,due:x.due||''});save(bq.kind,bq.id);msg='Added to the BD pipeline'}
+  else if(where==='office'){var tq=teamDoc();(tq.d.items=tq.d.items||[]).push({t:pre+x.t,who:x.who||'',due:x.due||''});save(tq.kind,tq.id);msg='Added to team actions'}
   else msg='Deleted';
   it.splice(i,1);save('single','inbox');render();toast(msg,where==='bin'?function(){it.splice(Math.min(i,it.length),0,x);save('single','inbox');render()}:null)}
 /* ---- what got done, and when ---- */
@@ -2008,7 +2024,11 @@ function teamCards(){var t=today();return sorted('people').map(function(x){var n
     +((x.d.dash||{}).focus?'<span class="pf">'+esc(x.d.dash.focus)+'</span>':'')
     +'<span class="tl2"><span'+(stale?' class="late-t"':'')+'>'+(l?'Check-in '+esc(fmtS(l)):'No check-in yet')+'</span><span>'+acts.length+' open'+(next?', next due '+esc(fmtS(next.due)):'')+'</span>'
     +(plan?'<span>Goal: '+esc(plan.goal)+(plan.by?' by '+esc(fmtS(plan.by)):'')+'</span>':'')+'</span></button>'}).join('')}
-V.team=function(){var pe=sorted('people'),inName=function(x,n){var p=store.projects[x.d.project];return isInt(p)&&String(p.name||'').trim().toLowerCase()===n},trec=function(x){return inName(x,'team')};if(ui.edit)return '<div class="head"><h1>Team</h1></div>'+editor('office');
+V.team=function(){if(intMoved()){var pe2=sorted('people'),tid=intId('team');
+    return '<div class="head"><h1>People</h1><span class="sp"></span><button class="btn" data-act="new" data-kind="people">New person</button></div>'
+      +'<div class="g">'+box('People',pe2.length?'<div class="cards tcards">'+teamCards()+'</div>':'<p class="empty">No people yet. "New person" adds someone.</p>',pe2.length?pe2.length+(pe2.length===1?' person':' people'):'','','','team:people')+'</div>'
+      +(tid?'<p class="meta">Team actions, improvements and team documents are in the <button class="link" data-go="project" data-id="'+tid+'">Team</button> internal project.</p>':'')}
+  var pe=sorted('people'),inName=function(x,n){var p=store.projects[x.d.project];return isInt(p)&&String(p.name||'').trim().toLowerCase()===n},trec=function(x){return inName(x,'team')};if(ui.edit)return '<div class="head"><h1>Team</h1></div>'+editor('office');
   var due=pe.filter(function(x){var l=lastCheck(x.id);return l?l<addDays(today(),-35):!!(x.d.ts&&Date.now()-x.d.ts>35*864e5)}).length;
   return '<div class="head"><h1>Team</h1><span class="sp"></span>'+updated(single('office'))+pdfBtn+editBtn('office')+'<button class="btn" data-act="new" data-kind="people">New person</button></div>'
     +'<div class="g">'+box('People',pe.length?'<div class="cards tcards">'+teamCards()+'</div>':'<p class="empty">No people yet. "New person" adds someone.</p>',pe.length?pe.length+' in the team'+(due?', '+due+' due a check-in':''):'','','','team:people')+'</div>'
@@ -2100,9 +2120,9 @@ V.project=function(){
   var htabs=d.hideTabs||{},choosing=ui.hideEdit===id;if(htabs[ui.tab]&&!choosing)ui.tab='sheet';
   var TABL=[['wiki','Project wiki'],['records','Documents']].concat(ctabs.map(function(p){return ['c_'+p.id,p.name||'Untitled']})).filter(function(t){return tabOn(d,t[0])});
   var pt=ptypeOf(d);if(!tabOn(d,ui.tab))ui.tab='sheet';
-  var lid=ui.tab==='sheet'?sheetLid(d):ui.tab==='wiki'||ui.tab.indexOf('c_')===0?ui.tab:null;
+  var lid=ui.tab==='sheet'?(d.solo?'solo:'+id:sheetLid(d)):ui.tab==='wiki'||ui.tab.indexOf('c_')===0?ui.tab:null;
   var HF=[];if(pt.fields.client)HF.push(['client','Client',1.4]);if(pt.fields.phase)HF.push(['phase','Phase',.9,'select',PHASES]);if(pt.fields.status)HF.push(['status','Status',.8,'select',STATUS]);HF.push(['ptype','Type',.8,'select',ptypeOpts]);HF.push(['code','Code',.45]);
-  var h='<div class="head"><h1 class="hname">'+mark(pt.fields.status?d.status:'')+' '+nameIn('projects',id,'Untitled project','Project name')+'</h1><span class="sp"></span>'+updated(d)+(ui.edit?'':'<button class="btn" data-act="newmeeting">Meeting</button>')+pdfBtn+(lid&&!ui.edit?editBtn(lid)+(ui.tab==='sheet'?'<button class="btn" data-act="edit" data-lid="own:projects:'+id+'">Add sections to this project only</button>':''):'')
+  var h='<div class="head"><h1 class="hname">'+mark(pt.fields.status?d.status:'')+' '+nameIn('projects',id,'Untitled project','Project name')+'</h1><span class="sp"></span>'+updated(d)+(ui.edit?'':'<button class="btn" data-act="newmeeting">Meeting</button>')+pdfBtn+(lid&&!ui.edit?editBtn(lid)+(ui.tab==='sheet'&&!d.solo?'<button class="btn" data-act="edit" data-lid="own:projects:'+id+'">Add sections to this project only</button>':''):'')
     +(ui.edit?'':'<button class="btn" data-act="hideedit">Show or hide sections</button>')+'<button class="btn" data-act="archive" data-kind="projects">'+(d.archived?'Restore from archive':'Archive')+'</button><button class="btn danger" data-act="del" data-kind="projects">'+(ui.confirm==='del'?'Confirm delete':'Delete')+'</button></div>'
     +hfields('projects',id,HF)
     +'<div class="tabs" style="margin-bottom:12px">'+tab('sheet','Project sheet')+tab('wiki','Project wiki')+tab('records','Documents'+(recs?' '+recs:''))+ctabs.map(function(p){return tab('c_'+p.id,esc(p.name||'Untitled'))}).join('')+'</div>'+hideBar('projects',id,TABL);
@@ -2116,7 +2136,7 @@ V.project=function(){
   var from=d.isNew?'<div class="g nop">'+box('New project','<div class="eline"><span class="meta">What kind of project?</span>'+ptypes().map(function(t){return '<button class="btn'+(pt.id===t.id?' pri':'')+'" data-act="setptype" data-pt="'+t.id+'">'+esc(t.name||'Untitled type')+'</button>'}).join('')+'</div>'
     +(others.length?'<div class="eline"><select class="ein" data-ui="from" aria-label="Project to copy from">'+opts(others,ui.from||others[0][0])+'</select><button class="btn" data-act="copyfrom">Copy its wiki, team and type</button></div>':'')
     +'<div class="eline"><button class="btn" data-act="dismissnew">Done</button><span class="meta">Change the type later from the Type field. Edit types in Settings.</span></div>','Documents and checklists stay with the original project'):'';
-  return h+from+rRows('projects',id,'',getLayout(sheetLid(d)).rows)+rRows('projects',id,'',(d.own||{}).rows)+hn;
+  return h+from+rRows('projects',id,'',sheetRows(d))+rRows('projects',id,'',(d.own||{}).rows)+hn;
 };
 V.person=function(){
   var id=ui.id,d=store.people[id];if(!d){ui.v='dash';return V.dash()}
@@ -2145,7 +2165,7 @@ V.sched=function(){var rows=allWork(!ui.rall),n=rows.filter(function(r){return r
     +'<div class="g">'+box('All people',sorted('people').length?gNav()+ganttHtml(rows):'<p class="empty">No people yet. Add people, then give each one a schedule on their page.</p>',n+' '+(n===1?'item':'items')+'. Edit each person\u2019s schedule on their page; drag bars to move them.',
       '<button class="mini" data-act="rall">'+(ui.rall?'Hide finished':'Show finished')+'</button>','','sched:all')+'</div>'
     +(oldN?'<div class="g">'+box('Old twelve-week grid',hfields('single','sched',[['title','Project or team',1]])+table('single','sched','rows',colsOf(SCHED[0].cols[0].b[0],old),SCHED[0].cols[0].b[0]),'From before Resourcing became a chart. Copy anything you need into people\u2019s schedules.','','','sched:old')+'</div>':'')};
-V.bd=function(){var d=single('bd');if(ui.edit)return '<div class="head"><h1>Business development</h1></div>'+editor('bd');return '<div class="head"><h1>Business development</h1><span class="sp"></span>'+updated(d)+pdfBtn+editBtn('bd')+'</div>'+rRows('single','bd','',getLayout('bd').rows)
+V.bd=function(){if(intMoved()&&intId('business development')){ui.v='project';ui.id=intId('business development');ui.tab='sheet';return V.project()}var d=single('bd');if(ui.edit)return '<div class="head"><h1>Business development</h1></div>'+editor('bd');return '<div class="head"><h1>Business development</h1><span class="sp"></span>'+updated(d)+pdfBtn+editBtn('bd')+'</div>'+rRows('single','bd','',getLayout('bd').rows)
   +'<div class="g">'+box('Proposal documents',recordList(function(x){return x.d.type==='proposal'||(isInt(store.projects[x.d.project])&&String(store.projects[x.d.project].name||'').trim().toLowerCase()==='business development')},'Proposal notes documents, and anything filed to the internal Business development project, show here.'),'','<button class="btn" data-act="newrec" data-type="proposal">New proposal notes</button>')+'</div>'};
 V.office=function(){return V.team()};
 V.page=function(){var pg=pages('page').filter(function(p){return p.id===ui.id})[0];if(!pg){ui.v='dash';return V.dash()}
@@ -2322,7 +2342,7 @@ function currentModel(){var v=ui.v,d,nm;
     if(ui.tab.indexOf('c_')===0)return {title:nm,kicker:layoutInfo(ui.tab)[0],meta:meta,rows:mRows(d,'x.'+ui.tab.slice(2)+'.',getLayout(ui.tab).rows)};
     if(ui.tab==='checks')ui.tab='records';
     if(ui.tab==='records')return {title:nm,kicker:'Documents',meta:meta,rows:[{cols:[[recordsModel(function(x){return x.project===ui.id})]]}]};
-    return {title:nm,kicker:'Project sheet',meta:meta,rows:mRows(d,'',getLayout(sheetLid(d)).rows).concat(mRows(d,'',(d.own||{}).rows))}}
+    return {title:nm,kicker:'Project sheet',meta:meta,rows:mRows(d,'',sheetRows(d)).concat(mRows(d,'',(d.own||{}).rows))}}
   if(v==='person'){d=store.people[ui.id];if(ui.tab.indexOf('c_')===0)return {title:d.name||'Unnamed',kicker:layoutInfo(ui.tab)[0],meta:[['Role',d.role]],rows:mRows(d,'x.'+ui.tab.slice(2)+'.',getLayout(ui.tab).rows)};
     return {title:d.name||'Unnamed',kicker:'Person sheet',meta:[['Role',d.role],['Started',fmtL(d.started)]],rows:mRows(d,'',getLayout('person').rows).concat(mRows(d,'',(d.own||{}).rows)).concat([{cols:[[recordsModel(function(x){return x.person===ui.id})]]}])}}
   if(v==='gsched')return {title:'Schedule',sub:'Open tasks as at '+fmtL(today()),rows:[{cols:[[SPECIAL.gsched.model({t:'All projects'})]]}]};
@@ -2780,7 +2800,7 @@ function render(focusKey){
   var R=function(v,l,n,on){return '<button data-go="'+v+'"'+(on||cur(v))+'>'+l+(n?'<span class="n">'+n+'</span>':'')+'</button>'};
   rail.innerHTML='<div class="brand">'+LOGO+'Workspace<span class="sp"></span><button class="undob" data-act="undolast" aria-label="Undo">\u21B6 Undo</button></div><input type="search" data-search="1" data-k="search" placeholder="Search" aria-label="Search the workspace" value="'+esc(ui.q)+'">'
     +'<select class="newsel" data-new="1" data-k="newsel" aria-label="Create something new"><option value="">New\u2026</option><option value="action">Action</option><option value="project">Project</option><option value="person">Person</option>'+formGroups().map(function(g){return '<optgroup label="'+esc(g.group)+'">'+g.items.map(function(o){return '<option value="r:'+esc(o[0])+'">'+esc(o[1])+'</option>'}).join('')+'</optgroup>'}).join('')+'</select>'
-    +R('dash','Dashboard')+R('inbox','Inbox',nIn)+R('actions','Actions',openA)+R('week','Week',0,ui.v==='week'||ui.v==='today'?' aria-current="page"':'')+R('gsched','Schedule')+R('sched','Resourcing')+R('records','Documents',nRec,ui.v==='records'||ui.v==='record'?' aria-current="page"':'')+R('bd','Business development')+R('team','Team',0,/^(team|office|people)$/.test(ui.v)?' aria-current="page"':'')
+    +R('dash','Dashboard')+R('inbox','Inbox',nIn)+R('actions','Actions',openA)+R('week','Week',0,ui.v==='week'||ui.v==='today'?' aria-current="page"':'')+R('gsched','Schedule')+R('sched','Resourcing')+R('records','Documents',nRec,ui.v==='records'||ui.v==='record'?' aria-current="page"':'')+(intMoved()?'':R('bd','Business development')+R('team','Team',0,/^(team|office|people)$/.test(ui.v)?' aria-current="page"':''))
     +'<div class="sec"><button class="secb" data-go="projects">Projects</button></div>'+(function(){var sp=projSplit(),pb=function(x){return '<button data-go="project" data-id="'+x.id+'"'+cur('project',x.id)+'>'+mark(x.d.status)+'<span style="overflow:hidden;text-overflow:ellipsis">'+esc(x.d.name||'Untitled project')+'</span></button>'};
       return sp.ext.map(pb).join('')+(sp.int.length?'<div class="subsec">Internal</div>'+sp.int.map(pb).join(''):'')})()+'<button class="new" data-act="new" data-kind="projects">+ New project</button>'
     +'<div class="sec"><button class="secb" data-go="team">People</button></div>'+sorted('people').map(function(x){return '<button data-go="person" data-id="'+x.id+'"'+cur('person',x.id)+'>'+esc(x.d.name||'Unnamed')+'</button>'}).join('')+'<button class="new" data-act="new" data-kind="people">+ New person</button>'
@@ -2868,6 +2888,9 @@ document.addEventListener('input',function(e){
 });
 document.addEventListener('change',function(e){
   var el=e.target,d=el.dataset;if(!d||rendering)return;
+  if(d.scope){var sp=store.projects[d.scope];if(!sp)return;
+    if(el.value==='solo'){sp.solo={rows:clone(getLayout(sheetLid(sp)).rows)};save('projects',d.scope);ui.edit='solo:'+d.scope;render();toast('This project now has its own layout. Other projects are not affected.')}
+    else{var was=sp.solo;delete sp.solo;save('projects',d.scope);ui.edit=sheetLid(sp);render();toast('Back on the shared layout',function(){sp.solo=was;save('projects',d.scope);ui.edit='solo:'+d.scope;render()})}return}
   if(d.phadd){addPhotos(d.phadd,[].slice.call(el.files||[]));el.value='';return}
   if(d.l&&el.type==='checkbox'){var q0=d.l.split('|');if(q0[4]==='done'){var a0=get(store[q0[0]][q0[1]]||{},q0[2]),r0=a0&&a0[+q0[3]];if(r0){r0.doneOn=el.checked?today():'';save(q0[0],q0[1])}}}
   if(d.l&&el.type==='checkbox'&&logDone(d.l,el.checked)&&el.checked&&/^(today|week|actions|dash|dump|reset|person|project)$/.test(ui.v)){var wkd=doneIn(mondayOf(),addDays(mondayOf(),6)).length;toast('Marked complete. '+wkd+' completed this week.')}
