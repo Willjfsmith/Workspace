@@ -1150,12 +1150,29 @@ function regPics(){document.querySelectorAll('img[data-ph]').forEach(function(el
     if(thumbCache[sig]){el.src=thumbCache[sig];return}phCompose(r.ph,360).then(function(c){if(c){thumbCache[sig]=c.data;el.src=c.data}else el.alt='Photo not found'})})}
 function filesBox(kind,id,path){var list=get(store[kind][id],path)||[],k=kind+'|'+id+'|'+path;
   return (list.length?'<div class="files">'+list.map(function(f,i){var url=f.url||'';
+    if(f.dbf)return '<div class="fi"><button class="fdoc" data-act="fopen" data-key="'+k+'|'+i+'" aria-label="Open '+esc(f.name)+'">'+esc(((f.name||'').split('.').pop()||'file').slice(0,5).toUpperCase())+'</button><span class="fn" title="'+esc(f.name)+'">'+esc(f.name)+'</span><button class="mini" data-file="'+k+'|'+i+'">Remove</button></div>';
     if(f.pic)return '<div class="fi"><button class="fth" data-act="phmark" data-key="'+k+'|'+i+'" title="Open to mark up with a pencil or mouse"><img data-ph="'+k+'|'+i+'" alt="'+esc(f.name)+'"></button><span class="fn" title="'+esc(f.name)+'">'+esc(f.name)+'</span><button class="mini" data-file="'+k+'|'+i+'">Remove</button></div>';
     return '<div class="fi">'+(!url?'<span class="fdoc" title="This file stayed behind in the Claude version. Add it again.">MISSING</span>':isImg(f)?'<button class="fth" data-act="lb" data-src="'+url+'" data-name="'+esc(f.name)+'" aria-label="View '+esc(f.name)+' larger"><img src="'+url+'" alt="'+esc(f.name)+'" loading="lazy"></button>'
         :'<a class="fdoc" href="'+url+'" target="_blank" rel="noopener" aria-label="Open '+esc(f.name)+'">'+esc(((f.type||'').split('/').pop()||'file').toUpperCase())+'</a>')
       +'<span class="fn" title="'+esc(f.name)+'">'+esc(f.name)+'</span><button class="mini" data-file="'+k+'|'+i+'">Remove</button></div>'}).join('')+'</div>':'')
     +'<div class="eline nop">'+(as?'<label class="btn" style="cursor:pointer;flex:none">Add photos or files<input class="file" type="file" multiple accept="image/*,application/pdf,video/mp4,video/webm,.csv,.md,.json,.txt" data-files="'+k+'"></label><span class="meta">Photos, PDFs, video and plain text files, up to 20 MB each</span>'
-      :'<label class="btn" style="cursor:pointer;flex:none">Add photos<input class="file" type="file" multiple accept="image/*" data-phadd="'+k+'"></label><span class="meta">Photos save to your database. Tap one to draw on it. PDFs and other files need Firebase Storage (SETUP.md, step 5).</span>')+'</div>'}
+      :'<label class="btn" style="cursor:pointer;flex:none">Add photos or files<input class="file" type="file" multiple data-fadd="'+k+'"></label><span class="meta">Up to 10 MB each. Tap a photo to draw on it.</span>')+'</div>'}
+/* without Firebase Storage, files are kept in the database in pieces ('img' documents named id~0, id~1 ...) */
+var FCHUNK=900000;
+function addFilesDb(key,files){var imgs=files.filter(function(f){return /^image\//.test(f.type)}),rest=files.filter(function(f){return !/^image\//.test(f.type)});if(imgs.length)addPhotos(key,imgs);if(!rest.length)return;
+  var q=key.split('|'),doc=store[q[0]][q[1]];if(!doc)return;if(!root){toast('Files can only be added while signed in.');return}
+  var big=rest.filter(function(f){return f.size>10*1024*1024});if(big.length)toast(big[0].name+' is over 10 MB, so it was not added.');rest=rest.filter(function(f){return f.size<=10*1024*1024});if(!rest.length)return;
+  toast('Adding '+(rest.length===1?rest[0].name:rest.length+' files'));
+  rest.reduce(function(ch,f){return ch.then(function(){return new Promise(function(res,rej){var fr=new FileReader();fr.onload=function(){res(String(fr.result).split(',')[1]||'')};fr.onerror=function(){rej(new Error('read'))};fr.readAsDataURL(f)}).then(function(b64){
+      var id='fl'+newId(),parts=[];for(var i=0;i<b64.length;i+=FCHUNK)parts.push(b64.slice(i,i+FCHUNK));if(!parts.length)parts=[''];
+      return parts.reduce(function(c2,pt,i){return c2.then(function(){return root.collection('img').doc(id+'~'+i).set({d:pt})})},Promise.resolve()).then(function(){
+        var arr=get(doc,q[2]);if(!Array.isArray(arr)){arr=[];setp(doc,q[2],arr)}arr.push({id:id,dbf:true,n:parts.length,name:f.name,type:f.type||'application/octet-stream',size:f.size});save(q[0],q[1]);render()})})})},Promise.resolve())
+  .then(function(){toast(rest.length===1?'File added':rest.length+' files added')},function(e){toast('The file could not be saved: '+((e&&(e.code||e.message))||'unknown error'))})}
+function openFileDb(f){var w=null;try{w=window.open('','_blank')}catch(e){}if(w)try{w.document.title=f.name;w.document.body.innerHTML='<p style="font:16px sans-serif;padding:20px">Opening '+esc(f.name)+'\u2026</p>'}catch(e){}
+  var jobs=[];for(var i=0;i<(f.n||1);i++)jobs.push(root?root.collection('img').doc(f.id+'~'+i).get():Promise.resolve(null));
+  Promise.all(jobs).then(function(ps){if(ps.some(function(x){return !x}))throw new Error('missing');var b=atob(ps.map(function(x){return x.d||''}).join('')),u=new Uint8Array(b.length);for(var j=0;j<b.length;j++)u[j]=b.charCodeAt(j);
+    var url=URL.createObjectURL(new Blob([u],{type:f.type||'application/octet-stream'}));if(w&&!w.closed)w.location.href=url;else if(dl)dl.save({filename:f.name,data:new Blob([u],{type:f.type})});setTimeout(function(){URL.revokeObjectURL(url)},120000)})
+  .catch(function(){if(w&&!w.closed)w.close();toast('That file could not be opened. It may still be uploading from another device.')})}
 function uploadFiles(el){var p=el.dataset.files.split('|'),files=[].slice.call(el.files||[]);if(!files.length||!as)return;
   var done=0,why={},chain=Promise.resolve(),miss=function(c){why[c]=(why[c]||0)+1};toast('Uploading '+files.length+(files.length===1?' file':' files'));
   files.forEach(function(file){var type=TYPES[(file.name.split('.').pop()||'').toLowerCase()];if(!type){miss('unsupported_type');return}
@@ -1167,7 +1184,7 @@ function uploadFiles(el){var p=el.dataset.files.split('|'),files=[].slice.call(e
 function removeFile(key){var p=key.split('|'),doc=store[p[0]][p[1]],arr=doc&&get(doc,p[2]),i=+p[3];if(!arr||!arr[i])return;
   var f=arr.splice(i,1)[0],undone=false;save(p[0],p[1]);render();
   toast('Removed '+f.name,function(){undone=true;var a2=get(store[p[0]][p[1]]||{},p[2]);if(a2){a2.splice(Math.min(i,a2.length),0,f);save(p[0],p[1]);render()}});
-  setTimeout(function(){if(undone)return;if(f.pic){if(root)root.collection('img').doc(f.id).delete().catch(function(){})}else if(as)as.delete(f.id).catch(function(){})},9000)}
+  setTimeout(function(){if(undone)return;if(f.dbf){for(var fi=0;fi<(f.n||1);fi++)if(root)root.collection('img').doc(f.id+'~'+fi).delete().catch(function(){})}else if(f.pic){if(root)root.collection('img').doc(f.id).delete().catch(function(){})}else if(as)as.delete(f.id).catch(function(){})},9000)}
 /* rich text: bold, italic, bullets only */
 var TAGS={B:1,STRONG:1,I:1,EM:1,U:1,UL:1,OL:1,LI:1,BR:1,DIV:1,P:1,H3:1,TABLE:1,TBODY:1,THEAD:1,TR:1,TD:1,TH:1}, DROP={SCRIPT:1,STYLE:1,IFRAME:1,OBJECT:1,EMBED:1,TEMPLATE:1};
 function cleanHtml(s){s=String(s||'');if(s.indexOf('<')<0)return esc(s).replace(/\n/g,'<br>');
@@ -2973,6 +2990,7 @@ document.addEventListener('change',function(e){
   if(d.scope){var sp=store.projects[d.scope];if(!sp)return;
     if(el.value==='solo'){sp.solo={rows:clone(getLayout(sheetLid(sp)).rows)};save('projects',d.scope);ui.edit='solo:'+d.scope;render();toast('This project now has its own layout. Other projects are not affected.')}
     else{var was=sp.solo;delete sp.solo;save('projects',d.scope);ui.edit=sheetLid(sp);render();toast('Back on the shared layout',function(){sp.solo=was;save('projects',d.scope);ui.edit='solo:'+d.scope;render()})}return}
+  if(d.fadd){addFilesDb(d.fadd,[].slice.call(el.files||[]));el.value='';return}
   if(d.phadd){addPhotos(d.phadd,[].slice.call(el.files||[]));el.value='';return}
   if(d.l&&el.type==='checkbox'){var q0=d.l.split('|');if(q0[4]==='done'){var a0=get(store[q0[0]][q0[1]]||{},q0[2]),r0=a0&&a0[+q0[3]];if(r0){r0.doneOn=el.checked?today():'';save(q0[0],q0[1])}}}
   if(d.l&&el.type==='checkbox'&&logDone(d.l,el.checked)&&el.checked&&/^(today|week|actions|dash|dump|reset|person|project)$/.test(ui.v)){var wkd=doneIn(mondayOf(),addDays(mondayOf(),6)).length;toast('Marked complete. '+wkd+' completed this week.')}
@@ -3216,6 +3234,7 @@ document.addEventListener('click',function(e){
   if(act==='menu'){document.documentElement.classList.toggle('menu-open');return}
   if(act==='msearch'){go('search');render('search2');return}
   if(act==='capsheet'){openSheet();return}
+  if(act==='fopen'){var fq=a.dataset.key.split('|'),fa=store[fq[0]][fq[1]]&&get(store[fq[0]][fq[1]],fq[2]),ff=fa&&fa[+fq[3]];if(ff)openFileDb(ff);return}
   if(act==='regadd'){var rq=a.dataset.key.split('|'),rdoc=store[rq[0]][rq[1]];if(!rdoc)return;var rarr=get(rdoc,rq[2]);if(!Array.isArray(rarr)){rarr=[];setp(rdoc,rq[2],rarr)}rarr.push({ref:'',t:'',resp:''});save(rq[0],rq[1]);render('records|'+rq[1]+'|'+rq[2]+'|'+(rarr.length-1)+'|ref');
     setTimeout(function(){var el=document.querySelector('[data-l="'+rq[0]+'|'+rq[1]+'|'+rq[2]+'|'+(rarr.length-1)+'|t"]');if(el)el.focus()},30);return}
   if(act==='phmark'){var pr=phRef(a.dataset.key);if(!pr)return;if(!pr.ph.ink||typeof pr.ph.ink!=='object')pr.ph.ink={h:Math.round(1000*(pr.ph.h||750)/(pr.ph.w||1000)),s:[],p:'plain',bg:pr.ph.id,fixed:1};
