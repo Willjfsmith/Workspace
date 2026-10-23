@@ -859,6 +859,32 @@ li:hover > .aupdb,.aupdb:focus-visible{opacity:1}
 .rich img{display:block; max-width:100%; height:auto; margin:6px 0; border:1px solid var(--rule); border-radius:3px; cursor:zoom-in}
 .rt .rtpic{position:relative; overflow:hidden; display:inline-flex; align-items:center; cursor:pointer; border:1px solid var(--rule); border-radius:3px; padding:1px 8px; font-size:.78rem; background:var(--board)}
 .rt .rtpic input{position:absolute; inset:0; opacity:0; cursor:pointer}
+.kwrap{display:grid; grid-template-columns:minmax(260px,330px) minmax(0,1fr); gap:20px; align-items:start}
+.ktree{position:sticky; top:8px; max-height:calc(100vh - 16px); overflow:auto; border:1px solid var(--rule); border-radius:6px; background:var(--board); padding:8px 6px}
+.ktree .ksearch{width:100%; margin:0 0 6px; box-sizing:border-box}
+.krow{display:flex; align-items:flex-start; padding-left:calc(var(--d) * 14px)}
+.kcar{flex:none; width:20px; height:24px; border:0; background:none; color:var(--muted); cursor:pointer; font-size:.75rem; padding:0}
+span.kcar{display:inline-block}
+.klink{flex:1; min-width:0; display:flex; flex-wrap:wrap; align-items:baseline; gap:0 6px; text-align:left; border:0; background:none; font:inherit; color:var(--ink); padding:3px 6px; border-radius:4px; cursor:pointer; font-size:.84rem}
+.klink:hover{background:var(--hit)} .klink[aria-current]{background:var(--ink); color:var(--board)} .klink[aria-current] .knum,.klink[aria-current] .ksum{color:inherit; opacity:.75}
+.krow.kg>.klink .kt{font-weight:600}
+.knum{color:var(--muted); font-variant-numeric:tabular-nums; font-size:.78em}
+.klink .kt{flex:1 1 0; min-width:0}
+.ksum{flex-basis:100%; color:var(--muted); font-size:.74rem; white-space:nowrap; overflow:hidden; text-overflow:ellipsis}
+.kdot{width:7px; height:7px; border-radius:50%; border:1.5px solid currentColor; align-self:center}
+.kdot.solid{background:currentColor}
+.kmain .head .hname input{font:inherit}
+.kcrumb{font-size:.78rem; color:var(--muted); margin:0 0 4px} .kcrumb .link{font-size:inherit; color:var(--muted)} .ksep{margin:0 4px}
+.kdesc{margin:-4px 0 10px}
+.krel{display:flex; flex-wrap:wrap; gap:6px 8px; align-items:center; margin:0 0 12px; font-size:.84rem}
+.krel .lab{color:var(--muted); font-size:.78rem}
+.kchip{display:inline-flex; align-items:center; gap:2px; border:1px solid var(--rule); border-radius:12px; padding:1px 4px 1px 10px; background:var(--board)}
+.kchip .kx{border:0; background:none; color:var(--muted); cursor:pointer; font-size:.9rem; padding:0 4px}
+.krel input{min-width:200px; flex:0 1 260px}
+.knav{display:flex; justify-content:space-between; gap:10px; margin:14px 0 30px} .knav .btn{max-width:48%; overflow:hidden; text-overflow:ellipsis; white-space:nowrap}
+.karr{display:flex; flex-direction:column; gap:8px; padding:10px 12px} .karr label{display:flex; gap:8px; align-items:center; font-size:.85rem} .karr label .ein{flex:1}
+.knback{display:none; margin:0 0 6px}
+@media (max-width:999px){.kwrap{display:block} .kwrap.has-page .ktree{display:none} .kwrap:not(.has-page) .kmain{display:none} .ktree{position:static; max-height:none; border:0; padding:0} .knback{display:inline-block} .klink{font-size:.95rem; padding:6px}}
 </style>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
 <script src="firebase-config.js"></script>
@@ -919,7 +945,7 @@ function resolveOpts(o){if(o.optsRef){var rf=OPTREF[o.optsRef];return typeof rf=
 var asItems=function(a){return a.map(function(t){return {t:t}})};
 
 /* ================= state and storage ================= */
-var KINDS=['single','projects','people','records','snaps','days'];
+var KINDS=['single','projects','people','records','snaps','days','know'];
 var store={}, root=null, mode='loading', seen={};KINDS.forEach(function(k){store[k]={}});
 var dirty={}, inflight={}, timers={}, fresh={}, gone={}, saving=0, dl=null, as=null;
 var ui={agroup:(function(){try{return localStorage.getItem('lw.agroup')||'list'}catch(e){return 'list'}})(),wmode:(function(){try{return localStorage.getItem('lw.wmode')||'week'}catch(e){return 'week'}})(),railMore:(function(){try{return localStorage.getItem('lw.railmore')==='1'}catch(e){return false}})(),v:'dash',id:null,tab:'sheet',q:'',confirm:null,showDone:false,rtype:'',cap:'follow',capP:'',edit:null,pgname:'',pgscope:'page',fold:{},tv:{}};
@@ -1688,6 +1714,7 @@ function search(q){q=q.trim().toLowerCase();var res=[];if(q.length<2)return res;
   [['dash','Dashboard','dash'],['bd','Business development','bd'],['office','Team','team'],['sched','Schedule and resourcing','sched'],['actions','Actions','actions']].forEach(function(x){if(store.single[x[0]])scan(x[1],store.single[x[0]],{v:x[2]})});
   Object.keys(store.days).forEach(function(id){var wkk=id.charAt(0)==='w';scan(wkk?'Week of '+fmtL(id.slice(1)):'Day, '+fmtL(id),store.days[id],wkk?{v:'week',id:id.slice(1)}:{v:'today',id:id})});
   if(store.single.inbox)scan('Inbox',store.single.inbox,{v:'inbox'});
+  var kx=kIndex();kx.order.forEach(function(id){var n=kx.by[id];if((n.title+' '+(n.desc||'')).toLowerCase().indexOf(q)>=0)res.push({where:'Knowledge: '+kLabel(id),text:n.desc||n.title,go:{v:'know',id:id}});if(store.know[id])scan('Knowledge: '+kLabel(id),store.know[id],{v:'know',id:id})});
   pages('page').forEach(function(p){if(store.single['pg_'+p.id])scan(p.name||'Page',store.single['pg_'+p.id],{v:'page',id:p.id})});
   return res.slice(0,60)}
 
@@ -1817,7 +1844,7 @@ var KINDN={'':'',follow:'Follow-up',rem:'Reminder',change:'Request',wait:'Waitin
 function mergeLists(){var d=store.single.dash;if(!d)return;var L=single('actions'),moved=0;if(!Array.isArray(L.list))L.list=[];
   [['follow','follow'],['rem','rem'],['changes','change']].forEach(function(z){var arr=d[z[0]];if(Array.isArray(arr)&&arr.length){arr.forEach(function(r){if(r&&r.t){L.list.push({t:r.t,kind:z[1],done:!!r.done});moved++}});d[z[0]]=[]}});
   if(moved){save('single','dash',true);save('single','actions',true);toast('Follow-ups, reminders and requests are now in Actions')}}
-var FILETO=[['action','Action'],['note','Notes'],['change','Change'],['wait','Waiting'],['follow','Follow-up'],['rem','Reminder'],['bd','BD'],['office','Team'],['bin','Delete']];
+var FILETO=[['action','Action'],['know','Knowledge'],['note','Notes'],['change','Change'],['wait','Waiting'],['follow','Follow-up'],['rem','Reminder'],['bd','BD'],['office','Team'],['bin','Delete']];
 var IBP=function(){return projGroups('No project')};
 function shortName(n){n=String(n||'project');return n.length>18?n.slice(0,17)+'\u2026':n}
 function fileAll(){var it=inboxItems(),L=single('actions').list,keep=[],moved=[],added=[];
@@ -1830,8 +1857,9 @@ function inboxHtml(){var it=inboxItems();if(!it.length)return '<p class="empty">
       +'<div class="ibmeta">'+cell('single','inbox','items',i,{k:'p',label:'Project',type:'select',opts:IBP,rr:1},x)+cell('single','inbox','items',i,{k:'who',label:'Who',type:'who',ph:'Who'},x)+cell('single','inbox','items',i,{k:'due',label:'Due',type:'date'},x)+'</div>'
       +'<span class="fileto" role="group" aria-label="File this as"><button class="eb pri" data-fileto="'+i+'|action" title="File it as an action'+(p?' on '+esc(p.name||'the project'):'')+', with its Who and Due">'+(p?'File':'File as action')+'</button>'
         +FILETO.filter(function(f){return f[0]!=='action'&&f[0]!=='bin'&&(ui.ibOpen===i||/^(note|change)$/.test(f[0]))}).map(function(f){return '<button class="eb" data-fileto="'+i+'|'+f[0]+'">'+(f[0]==='change'?(p?'Change log':'Request'):f[1])+'</button>'}).join('')
-        +(ui.ibOpen===i?'':'<button class="eb quiet" data-ibm="'+i+'">More</button>')+'<span class="sp"></span><button class="eb quiet" data-fileto="'+i+'|bin">Delete</button></span></li>'}).join('')+'</ul>'}
-function fileTo(i,where){var it=inboxItems(),x=it[i];if(!x||!String(x.t||'').trim()){if(x&&where==='bin'){it.splice(i,1);save('single','inbox');render()}return}var p=store.projects[x.p],pre=p?(p.name||'Project')+': ':'',msg,dd;
+        +(ui.ibOpen===i?'':'<button class="eb quiet" data-ibm="'+i+'">More</button>')+'<span class="sp"></span><button class="eb quiet" data-fileto="'+i+'|bin">Delete</button></span>'
+      +(ui.ibKnow===i?'<div class="eline kfile"><input class="ein" list="kpagelist" data-kfile="'+i+'" placeholder="Type a page name or number" aria-label="Knowledge page to file this to" style="flex:1"><button class="mini" data-act="kfilex">Cancel</button><span class="meta">Adds it to Jobs & stories, dated.</span></div>':'')+'</li>'}).join('')+'</ul>'+(ui.ibKnow!=null?kList():'')}
+function fileTo(i,where){if(where==='know'){ui.ibKnow=ui.ibKnow===i?null:i;render('kfile');setTimeout(function(){var e=document.querySelector('[data-kfile="'+i+'"]');if(e)e.focus()},30);return}var it=inboxItems(),x=it[i];if(!x||!String(x.t||'').trim()){if(x&&where==='bin'){it.splice(i,1);save('single','inbox');render()}return}var p=store.projects[x.p],pre=p?(p.name||'Project')+': ':'',msg,dd;
   if(where==='action'||where==='follow'||where==='rem'||where==='wait'||(where==='change'&&!p)){single('actions').list.push({t:x.t,kind:where==='action'?'':where,project:x.p||'',who:x.who||'',due:x.due||''});save('single','actions');
     msg=(where==='action'?'Filed as an action':'Filed in Actions as a '+KINDN[where==='change'?'change':where].toLowerCase())+(p?' on '+(p.name||'the project'):'')}
   else if(where==='note'){dd=single('dash');dd.notes=cleanHtml(dd.notes||'')+'<div>'+esc(pre+x.t)+'</div>';save('single','dash');msg='Added to general notes'}
@@ -2249,6 +2277,104 @@ function actGroups(g){var t=today(),all=allActions().filter(function(a){return u
   else if(g==='due')keys.sort();
   else keys.sort(function(a,b){return a===''?1:b===''?-1:a.localeCompare(b)});
   return keys.map(boxOf).join('')}
+/* ================= Knowledge: your body of knowledge as a tree of pages =================
+   The tree (single/ktree) holds structure only: {id, parent, title, desc}, in reading order. Each page's writing lives in its own
+   'know' document, keyed by the node id, so renaming or moving a page never loses what is on it. Related pages are pairs in single/krel. */
+var KST=[['','Empty'],['draft','Draft'],['solid','Solid']], KBODY=[['know','What I know'],['tpl','Templates & examples'],['jobs','Jobs & stories']];
+var KROWS=[L(null,R('know','What I know',null,140)),L(null,R('tpl','Templates & examples',null,110)),L(null,R('jobs','Jobs & stories',null,110)),L(null,FILES('Attachments'))];
+function ktree(){var t=single('ktree');if(!Array.isArray(t.nodes))t.nodes=[];return t}
+var kIx=null,kIxRev=-1;
+function kIndex(){if(kIx&&kIxRev===rev)return kIx;var N=ktree().nodes,by={},kids={},order=[],num={},depth={};
+  N.forEach(function(n,i){if(n&&n.id){by[n.id]=n;n._i=i}});
+  N.forEach(function(n){if(!n||!n.id)return;var pa=n.parent&&by[n.parent]?n.parent:'';(kids[pa]=kids[pa]||[]).push(n.id)});
+  (function walk(pa,pre,d){(kids[pa]||[]).forEach(function(id,i){var nm=pre?pre+'.'+(i+1):String(i+1);num[id]=nm;depth[id]=d;order.push(id);walk(id,nm,d+1)})})('','',0);
+  var pages=order.filter(function(id){return !(kids[id]&&kids[id].length)});
+  var orph=Object.keys(store.know).filter(function(id){return !by[id]&&kHas(store.know[id])});
+  kIx={by:by,kids:kids,order:order,num:num,depth:depth,pages:pages,orph:orph};kIxRev=rev;return kIx}
+function kHas(d){return !!d&&(KBODY.some(function(b){var v=d[b[0]];return v&&String(v).replace(/<[^>]+>/g,'').trim()||/<img|<table/.test(String(v||''))||(d[b[0]+'_ink']&&(d[b[0]+'_ink'].ref||(d[b[0]+'_ink'].s||[]).length))})||!!String(d.summary||'').trim()||(d.files||[]).length>0)}
+function kTitle(id){var n=kIndex().by[id];return n?n.title||'Untitled':'Unfiled page'}
+function kLabel(id){var x=kIndex();return (x.num[id]?x.num[id]+'  ':'')+kTitle(id)}
+function kAnc(id){var x=kIndex(),out=[],n=x.by[id];while(n&&n.parent&&x.by[n.parent]){out.unshift(n.parent);n=x.by[n.parent]}return out}
+function kRel(id){return (single('krel').pairs||[]).filter(function(p){return p[0]===id||p[1]===id}).map(function(p){return p[0]===id?p[1]:p[0]})}
+function kDoc(id){if(!store.know[id])store.know[id]={};return store.know[id]}
+var kOpen=(function(){try{return JSON.parse(localStorage.getItem('lw.kopen')||'{}')||{}}catch(e){return {}}})();
+function kSaveOpen(){try{localStorage.setItem('lw.kopen',JSON.stringify(kOpen))}catch(e){}}
+function kList(){var x=kIndex();return '<datalist id="kpagelist">'+x.order.map(function(id){return '<option value="'+esc(x.num[id]+'  '+(x.by[id].title||''))+'">'}).join('')+'</datalist>'}
+function kFind(v){v=String(v||'').trim();if(!v)return '';var x=kIndex(),n=v.split(/\s+/)[0],hit='';Object.keys(x.num).forEach(function(id){if(x.num[id]===n)hit=id});
+  if(!hit){var lv=v.toLowerCase();x.order.forEach(function(id){if(!hit&&String(x.by[id].title||'').toLowerCase()===lv)hit=id})}return hit}
+/* reading a tree from a file: the markdown outline you wrote ("## 1 Title", "- **1.1.1 Title** — description") or a JSON {nodes:[...]} */
+function kParse(text){var nodes=[],name='';text=String(text||'');
+  try{var j=JSON.parse(text);if(j&&Array.isArray(j.nodes)){j.nodes.forEach(function(n){if(n&&n.id)nodes.push({id:String(n.id),parent:n.parent?String(n.parent):'',title:String(n.title||''),desc:String(n.desc||'')})});return {name:j.name||'',nodes:nodes}}}catch(e){}
+  var seen={};text.split(/\r?\n/).forEach(function(l){var h=l.match(/^#\s+(.*)$/);if(h&&!nodes.length){name=h[1].trim();return}
+    var c=l.replace(/^[\s#>*-]+/,'').replace(/\*\*/g,''),m=c.match(/^(\d+(?:\.\d+)*)\.?\s+(.+)$/);if(!m||seen[m[1]])return;seen[m[1]]=1;
+    var rest=m[2].split(/\s+[—–]\s+|\s+--?\s+/),pa=m[1].indexOf('.')>0?m[1].replace(/\.\d+$/,''):'';nodes.push({id:m[1],parent:seen[pa]?pa:'',title:rest[0].trim(),desc:(rest.slice(1).join(' — ')||'').trim()})});
+  return {name:name,nodes:nodes}}
+function kImport(el){var f=el.files&&el.files[0];el.value='';if(!f)return;var rd=new FileReader();rd.onload=function(){var r=kParse(rd.result);
+    if(!r.nodes.length){toast('No numbered headings found in that file. Each line needs a number such as 1.2.3 then the title.');return}
+    var t=ktree(),was={name:t.name,nodes:clone(t.nodes)};t.name=r.name||t.name||'Body of knowledge';t.nodes=r.nodes;save('single','ktree');kIx=null;render();
+    toast('Loaded '+r.nodes.length+' entries into Knowledge',was.nodes.length?function(){var t2=ktree();t2.name=was.name;t2.nodes=was.nodes;save('single','ktree');kIx=null;render()}:null)};rd.readAsText(f)}
+function kToMd(){var x=kIndex(),out=['# '+(ktree().name||'Body of knowledge'),''];x.order.forEach(function(id){var n=x.by[id],d=x.depth[id],lab=x.num[id]+' '+(n.title||'')+(n.desc?' — '+n.desc:'');
+    if(d===0)out.push('','## '+lab);else if(d===1)out.push('','### '+lab);else if(d===2)out.push('- **'+x.num[id]+' '+(n.title||'')+'**'+(n.desc?' — '+n.desc:''));else out.push(new Array(d-1).join('  ')+'- '+lab)});return out.join('\n')+'\n'}
+function kNewId(parent){var N=ktree().nodes,base=parent||'',max=0;N.forEach(function(n){if((n.parent||'')===base&&n.id){var last=+String(n.id).split('.').pop();if(last>max)max=last}});
+  var id=(base?base+'.':'')+(max+1);while(kIndex().by[id]||store.know[id])id=id+'a';return id}
+function kAdd(parent,after,title){var t=ktree(),id=kNewId(parent),n={id:id,parent:parent||'',title:title||'New page',desc:''},x=kIndex(),at=t.nodes.length;
+  if(after&&x.by[after]){var last=after,walk=function(i){(x.kids[i]||[]).forEach(function(c){last=c;walk(c)})};walk(after);at=x.by[last]._i+1}
+  else if(parent&&x.by[parent]){var lp=parent;(function w(i){(x.kids[i]||[]).forEach(function(c){lp=c;w(c)})})(parent);at=x.by[lp]._i+1}
+  t.nodes.splice(at,0,n);if(parent){kOpen[parent]=1;kSaveOpen()}save('single','ktree');kIx=null;return id}
+function kRows(){var x=kIndex(),q=String(ui.kq||'').trim().toLowerCase(),show={},cur=ui.v==='know'?ui.id:null;
+  if(q){x.order.forEach(function(id){var n=x.by[id],d=store.know[id]||{};if((x.num[id]+' '+n.title+' '+(n.desc||'')+' '+(d.summary||'')).toLowerCase().indexOf(q)>=0){show[id]=1;kAnc(id).forEach(function(a){show[a]=1})}})}
+  if(cur)kAnc(cur).forEach(function(a){kOpen[a]=1});
+  var rows=x.order.filter(function(id){if(q)return show[id];return kAnc(id).every(function(a){return kOpen[a]})}).map(function(id){var n=x.by[id],g=!!(x.kids[id]&&x.kids[id].length),d=store.know[id]||{},op=q||kOpen[id];
+    return '<div class="krow'+(g?' kg':'')+'" style="--d:'+x.depth[id]+'">'+(g?'<button class="kcar" data-act="ktog" data-id="'+esc(id)+'" aria-expanded="'+!!op+'" aria-label="'+(op?'Collapse ':'Expand ')+esc(n.title)+'">'+(op?'▾':'▸')+'</button>':'<span class="kcar"></span>')
+      +'<button class="klink" data-go="know" data-id="'+esc(id)+'"'+(cur===id?' aria-current="page"':'')+'><span class="knum">'+esc(x.num[id])+'</span><span class="kt">'+esc(n.title||'Untitled')+'</span>'
+      +(d.status?'<span class="kdot '+esc(d.status)+'" title="'+(d.status==='solid'?'Solid':'Draft')+'"></span>':'')+(d.summary?'<span class="ksum">'+esc(d.summary)+'</span>':'')+'</button></div>'}).join('');
+  if(x.orph.length&&!q)rows+='<div class="krow kg" style="--d:0"><button class="kcar" data-act="ktog" data-id="__orph" aria-expanded="'+!!kOpen.__orph+'">'+(kOpen.__orph?'▾':'▸')+'</button><span class="klink" style="cursor:default"><span class="kt">Unfiled</span><span class="ksum">'+x.orph.length+' with writing but no place in the tree</span></span></div>'
+    +(kOpen.__orph?x.orph.map(function(id){return '<div class="krow" style="--d:1"><span class="kcar"></span><button class="klink" data-go="know" data-id="'+esc(id)+'"'+(cur===id?' aria-current="page"':'')+'><span class="knum">'+esc(id)+'</span><span class="kt">'+esc((store.know[id]||{}).summary||'Unfiled page')+'</span></button></div>'}).join(''):'');
+  return rows||'<p class="empty">'+(q?'Nothing matches.':'No entries yet.')+'</p>'}
+function kPrevNext(id){var P=kIndex().order,i=P.indexOf(id),pv=i>0?P[i-1]:null,nx=i>=0&&i<P.length-1?P[i+1]:null;
+  return '<div class="knav nop">'+(pv?'<button class="btn" data-go="know" data-id="'+esc(pv)+'">← '+esc(kLabel(pv))+'</button>':'<span></span>')+(nx?'<button class="btn" data-go="know" data-id="'+esc(nx)+'">'+esc(kLabel(nx))+' →</button>':'')+'</div>'}
+function kPage(id){var x=kIndex(),n=x.by[id],d=kDoc(id),orph=!n,g=!!(x.kids[id]&&x.kids[id].length);
+  var crumbs=kAnc(id).map(function(a){return '<button class="link" data-go="know" data-id="'+esc(a)+'">'+esc(x.num[a]+' '+(x.by[a].title||''))+'</button>'}).join(' <span class="ksep">›</span> ');
+  var ti=n?'<input class="hin" data-b="single|ktree|nodes.'+n._i+'.title" data-k="ktitle" data-rr="1" value="'+esc(n.title||'')+'" placeholder="Page title" aria-label="Page title">':'<span>Unfiled page</span>';
+  var h='<button class="link knback nop" data-go="know">← Knowledge</button>'+(crumbs?'<div class="kcrumb">'+crumbs+'</div>':'')
+    +'<div class="head"><h1 class="hname"><span class="knum">'+esc(x.num[id]||'')+'</span> '+ti+'</h1><span class="sp"></span>'+updated(d)+pdfBtn
+    +'<button class="btn" data-act="kedit" aria-pressed="'+(ui.kedit===id)+'">Arrange</button></div>'
+    +(n&&n.desc?'<p class="meta kdesc">'+esc(n.desc)+'</p>':'')
+    +hfields('know',id,[['status','Status',.5,'select',KST],['summary','Summary',2]]);
+  if(orph)h+='<p class="unfnote nop">This page has writing but no place in your tree, usually because the tree was replaced. <button class="mini" data-act="kadopt" data-id="'+esc(id)+'">Add it to the tree</button> <button class="mini" data-act="kdel" data-id="'+esc(id)+'">'+(ui.confirm==='kdel'?'Confirm delete':'Delete')+'</button></p>';
+  if(ui.kedit===id&&n){var opts2=[['','Top level']].concat(x.order.filter(function(o){return o!==id&&kAnc(o).indexOf(id)<0}).map(function(o){return [o,x.num[o]+'  '+(x.by[o].title||'')]}));
+    h+='<div class="g nop">'+box('Arrange','<div class="karr"><label>Description <input class="ein" data-b="single|ktree|nodes.'+n._i+'.desc" data-k="kdescin" data-rr="1" value="'+esc(n.desc||'')+'" placeholder="One line on what this covers"></label>'
+      +'<label>Sits under <select class="ein" data-kmove="'+esc(id)+'" aria-label="Sits under">'+opts(opts2,n.parent||'')+'</select></label>'
+      +'<div class="eline"><button class="btn" data-act="kmv" data-d="-1" data-id="'+esc(id)+'">Move up</button><button class="btn" data-act="kmv" data-d="1" data-id="'+esc(id)+'">Move down</button>'
+      +'<button class="btn" data-act="kaddsub" data-id="'+esc(id)+'">Add a page under this</button><button class="btn" data-act="kaddnext" data-id="'+esc(id)+'">Add a page after this</button>'
+      +'<span class="sp"></span><button class="btn danger" data-act="kdel" data-id="'+esc(id)+'">'+(ui.confirm==='kdel'?'Confirm delete':'Delete page')+'</button></div>'
+      +'<p class="meta">Numbers follow the order of the tree, so they update when you move things. What you have written stays with the page.</p></div>','','',null,'kn:arrange')+'</div>'}
+  var rel=kRel(id);
+  h+='<div class="krel"><span class="lab">Related</span>'+rel.map(function(r){return '<span class="kchip"><button class="link" data-go="know" data-id="'+esc(r)+'">'+esc(kLabel(r))+'</button><button class="kx nop" data-act="krelx" data-a="'+esc(id)+'" data-b="'+esc(r)+'" aria-label="Remove link to '+esc(kTitle(r))+'">×</button></span>'}).join('')
+    +'<input class="ein nop" list="kpagelist" data-krel="'+esc(id)+'" placeholder="+ Link a related page" aria-label="Link a related page"></div>';
+  if(g)h+='<div class="g">'+box('In this section','<ul class="list">'+x.kids[id].map(function(c){var cd=store.know[c]||{};return '<li><button class="link" data-go="know" data-id="'+esc(c)+'">'+esc(kLabel(c))+'</button>'+(cd.summary?'<span class="k">'+esc(cd.summary)+'</span>':'')+'</li>'}).join('')+'</ul>','','','','kn:kids')+'</div>';
+  return h+rRows('know',id,'',KROWS)+kPrevNext(id)}
+V.know=function(){var x=kIndex(),id=ui.id&&(x.by[ui.id]||store.know[ui.id])?ui.id:null;if(ui.id&&!id)ui.id=null;
+  if(!x.order.length&&!x.orph.length)return '<div class="head"><h1>Knowledge</h1></div><div class="g">'+box('Load your body of knowledge','<div class="eline"><label class="btn pri" style="cursor:pointer">Choose the tree file<input class="file" type="file" accept=".md,.txt,.json,text/markdown,application/json" data-kimport="1"></label></div>'
+    +'<p class="meta" style="padding:0 12px 12px">A Markdown outline where each line starts with its number (## 1 Mechanical engineering, ### 1.1 Design basis, - **1.1.1 Design criteria** — description) or a JSON file with a nodes list. It is saved to your own account, not to the website. Or start from scratch: <button class="link" data-act="kaddtop">add a first section</button>.</p>')+'</div>';
+  var tree='<div class="ktree nop"><input type="search" class="ein ksearch" data-ks="1" data-k="ksearch" value="'+esc(ui.kq||'')+'" placeholder="Filter the tree" aria-label="Filter the tree"><div class="krows" role="tree">'+kRows()+'</div>'
+    +'<div class="eline"><button class="mini" data-act="kaddtop">+ Section</button><span class="sp"></span><button class="mini" data-act="kexpand" data-v="0">Collapse all</button></div></div>';
+  var main=id?kPage(id):'<div class="head"><h1>'+esc(ktree().name||'Knowledge')+'</h1><span class="sp"></span>'+pdfBtn+'</div><p class="meta">'+x.pages.length+' pages in '+(x.kids['']||[]).length+' sections. Pick a page on the left, or filter by a word.</p>'
+    +'<div class="g">'+box('Sections','<ul class="list">'+(x.kids['']||[]).map(function(s0){return '<li><button class="link" data-go="know" data-id="'+esc(s0)+'">'+esc(kLabel(s0))+'</button></li>'}).join('')+'</ul>','','','','kn:secs')+'</div>';
+  return '<div class="kwrap'+(id?' has-page':'')+'">'+tree+'<div class="kmain">'+main+'</div></div>'+kList()};
+/* exports: one page, or a section with every page under it that has writing */
+function kModelRows(id,withTitle){var d=store.know[id]||{},bl=[];if(!kHas(d))return [];
+  var ti=kLabel(id);if(d.summary)bl.push({t:withTitle?ti:'Summary',kind:'text',text:d.summary});
+  KBODY.forEach(function(b){var v=d[b[0]],ik=d[b[0]+'_ink'];if((v&&String(v).replace(/<[^>]+>/g,'').trim())||/<img|<table/.test(String(v||''))||(ik&&(ik.s||[]).length))bl.push({t:(withTitle&&!d.summary&&!bl.length?ti+': ':'')+b[1],kind:'rich',html:v||'',ink:ik||null})});
+  if((d.files||[]).length){var fm=mBox(d,'',FILES('Attachments'));if(fm)bl.push(fm)}
+  return bl.map(function(b){return {w:[1],cols:[[b]]}})}
+function kModel(id){var x=kIndex(),d=store.know[id]||{},g=!!(x.kids[id]&&x.kids[id].length),rel=kRel(id).map(kLabel).join('; ');
+  var meta=[['Status',(KST.filter(function(s0){return s0[0]===(d.status||'')})[0]||KST[0])[1]],['Updated',fmtL(d.updated)],['Related',rel]].filter(function(m){return m[1]});
+  if(!g)return {title:kLabel(id),kicker:'Knowledge',meta:meta,rows:kModelRows(id,false),fname:fileName('Knowledge - '+kLabel(id))};
+  var all=[id].concat(x.order.filter(function(o){return kAnc(o).indexOf(id)>=0})),filled=all.filter(function(o){return kHas(store.know[o])}),rows=[];
+  rows.push({w:[1],cols:[[{t:'Contents',kind:'table',min:1,cols:[{label:'No.',w:.5},{label:'Page',w:2.4},{label:'Status',w:.6}],rows:filled.map(function(o){var od=store.know[o]||{};return [x.num[o]||o,kTitle(o)+(od.summary?' — '+od.summary:''),od.status==='solid'?'Solid':od.status==='draft'?'Draft':'']})}]]});
+  filled.forEach(function(o){rows=rows.concat(kModelRows(o,true))});
+  return {title:kLabel(id),kicker:'Knowledge section',meta:[['Pages with writing',String(filled.length)]],rows:rows,fname:fileName('Knowledge - '+kLabel(id))}}
 V.records=function(){
   var G=[['project','By project'],['person','By person'],['form','By type'],['date','By date']],g=ui.rgroup||'project';if(g==='folder')g='project';
   var h='<div class="head"><h1>Documents</h1><div class="tabs">'+G.map(function(x){return '<button data-act="rgroup" data-g="'+x[0]+'" aria-pressed="'+(g===x[0])+'">'+x[1]+'</button>'}).join('')+'</div><span class="sp"></span>'+newRecordCtl('','')+'<button class="mini" data-go="rtypes">Document templates</button></div>';
@@ -2324,6 +2450,8 @@ V.settings=function(){
     +'<div class="g">'+box('You','<div class="youbox"><label>Your names and initials <input class="ein" data-b="single|settings|me" data-k="setme" data-rr="1" value="'+esc(stS.me||'')+'" placeholder="e.g. Will, WS, Will Smith" aria-label="Your names and initials"></label>'
       +'<label class="ptck"><input type="checkbox" data-b="single|settings|blankOthers" data-k="setblank" data-rr="1"'+(stS.blankOthers?' checked':'')+'> Treat actions with no Who as someone else\u2019s</label>'
       +'<p class="meta">Actions in documents whose Who is not one of these go to Other people\u2019s actions, out of your counts, dashboard and week. Your own action list is always yours. Leave it empty to count everything as yours.</p></div>','Used only to sort actions. Separate names with commas.')+'</div>'
+    +'<div class="g">'+box('Knowledge tree','<div class="eline"><label class="btn" style="cursor:pointer">Replace the tree from a file<input class="file" type="file" accept=".md,.txt,.json,text/markdown,application/json" data-kimport="1"></label><button class="btn" data-act="ktreedl">Download the tree</button>'
+      +'<span class="meta">'+kIndex().order.length+' entries. Replacing keeps everything you have written: pages match by number, and any that no longer fit show under Unfiled.</span></div>','')+'</div>'
     +'<div class="g">'+box('Your own pages and tabs',(pg.some(function(p){return p.scope!=='form'})?'<ul class="list">'+pg.map(function(p,i){if(p.scope==='form')return '';var nk='single|layouts|pages.'+i+'.name';
         return '<li><input class="ein" data-b="'+nk+'" data-k="'+nk+'" data-rr="1" value="'+esc(p.name)+'" placeholder="Name" aria-label="Name" style="flex:0 1 240px"><span class="k">'+esc(SC.filter(function(x){return x[0]===p.scope})[0][1])+'</span><span class="sp"></span>'
           +'<button class="mini" data-act="edit" data-lid="c_'+p.id+'">Edit layout</button><button class="mini" data-act="rmpage" data-i="'+i+'">'+(ui.confirm==='pg'+i?'Confirm remove':'Remove')+'</button></li>'}).join('')+'</ul>':'<p class="empty">Nothing added yet. Create a page or a tab, then build its layout from sections.</p>')
@@ -2369,6 +2497,7 @@ function regModel(t,v,b){var rows=(v||[]).filter(function(r){return r&&(r.t||r.r
 function mRows(doc,base,rows){rows=unhidden(doc,base,rows);return (rows||[]).map(function(r){var cs=vis(r);return {w:cs.map(function(c){return c.w}),cols:cs.map(function(c){return c.b.reduce(function(a,b){var m=mBox(doc,base,b);return a.concat(Array.isArray(m)?m:[m])},[]).filter(Boolean)})}})}
 function modelDash(){return {title:'Dashboard',sub:'As at '+fmtL(today()),rows:mRows(single('dash'),'',getLayout('dash').rows)}}
 function currentModel(){var v=ui.v,d,nm;
+  if(v==='know'){if(ui.id)return kModel(ui.id);var kx=kIndex();return {title:ktree().name||'Knowledge',kicker:'Contents',rows:[{w:[1],cols:[[{t:'Contents',kind:'table',min:1,cols:[{label:'No.',w:.5},{label:'Page',w:2.4},{label:'Status',w:.6}],rows:kx.order.map(function(o){var od=store.know[o]||{};return [kx.num[o],new Array(kx.depth[o]+1).join('   ')+kTitle(o),od.status==='solid'?'Solid':od.status==='draft'?'Draft':'']})}]]}]}}
   if(v==='dash')return modelDash();
   if(v==='project'){d=store.projects[ui.id];nm=d.name||'Untitled project';var ptm=ptypeOf(d),meta=[['Type',ptm&&ptm.name],ptm.fields.client?['Client',d.client]:['',''],ptm.fields.phase?['Phase',d.phase]:['',''],ptm.fields.status?['Status',cellText({type:'select',opts:STATUS},d.status)]:['','']].filter(function(m){return m[0]});
     if(ui.tab==='wiki')return {title:nm,kicker:'Project wiki',meta:meta,rows:mRows(d,'wiki.',getLayout('wiki').rows)};
@@ -2581,6 +2710,8 @@ function backupDocs(){var out=[],used={},add=function(name,model){if(!model)retu
     add('Document - '+(r.no?r.no+' - ':'')+(r.date||'undated')+' - '+formDef(r.type).name+(r.title?' - '+r.title:'')+(pr&&pr.name&&String(r.title||'').indexOf(pr.name)<0?' - '+pr.name:''),modelFor('record',x.id))});
   [['dash','Dashboard'],['actions','Actions'],['gsched','Schedule'],['sched','Resourcing'],['bd','Business development'],['team','Team']].forEach(function(w){add('Workspace - '+w[1],modelFor(w[0],null))});
   pages('page').forEach(function(pg){add('Workspace - '+(pg.name||'Page'),modelFor('page',pg.id))});
+  var kx=kIndex();(kx.kids['']||[]).forEach(function(s0){var m=kModel(s0);if(m.rows.length>1||kHas(store.know[s0]))add('Knowledge - '+kLabel(s0),m)});
+  kx.orph.forEach(function(o){var m=kModel(o);m.title='Unfiled '+o;add('Knowledge - Unfiled '+o,m)});
   return out}
 /* the chosen folder is remembered in this browser (IndexedDB), so later backups go straight there */
 function bkStore(mode,fn){return new Promise(function(res,rej){try{var rq=indexedDB.open('lw-backup',1);rq.onupgradeneeded=function(){rq.result.createObjectStore('h')};
@@ -2921,7 +3052,7 @@ function render(focusKey){
   var R=function(v,l,n,on){return '<button data-go="'+v+'"'+(on||cur(v))+'>'+l+(n?'<span class="n">'+n+'</span>':'')+'</button>'};
   rail.innerHTML='<div class="brand">'+LOGO+'Workspace<span class="sp"></span><button class="undob" data-act="undolast" aria-label="Undo">\u21B6 Undo</button></div><input type="search" data-search="1" data-k="search" placeholder="Search" aria-label="Search the workspace" value="'+esc(ui.q)+'">'
     +'<select class="newsel" data-new="1" data-k="newsel" aria-label="Create something new"><option value="">New\u2026</option><option value="action">Action</option><option value="project">Project</option><option value="person">Person</option>'+formGroups().map(function(g){return '<optgroup label="'+esc(g.group)+'">'+g.items.map(function(o){return '<option value="r:'+esc(o[0])+'">'+esc(o[1])+'</option>'}).join('')+'</optgroup>'}).join('')+'</select>'
-    +R('dash','Dashboard')+R('inbox','Inbox',nIn)+R('actions','Actions',openA)+R('week','Week',0,ui.v==='week'||ui.v==='today'?' aria-current="page"':'')+R('gsched','Schedule')+R('sched','Resourcing')+R('records','Documents',nRec,ui.v==='records'||ui.v==='record'?' aria-current="page"':'')+(intMoved()?'':R('bd','Business development')+R('team','Team',0,/^(team|office|people)$/.test(ui.v)?' aria-current="page"':''))
+    +R('dash','Dashboard')+R('inbox','Inbox',nIn)+R('actions','Actions',openA)+R('week','Week',0,ui.v==='week'||ui.v==='today'?' aria-current="page"':'')+R('gsched','Schedule')+R('sched','Resourcing')+R('records','Documents',nRec,ui.v==='records'||ui.v==='record'?' aria-current="page"':'')+R('know','Knowledge')+(intMoved()?'':R('bd','Business development')+R('team','Team',0,/^(team|office|people)$/.test(ui.v)?' aria-current="page"':''))
     +'<div class="sec"><button class="secb" data-go="projects">Projects</button></div>'+(function(){var sp=projSplit(),pb=function(x){return '<button data-go="project" data-id="'+x.id+'"'+cur('project',x.id)+'>'+mark(x.d.status)+'<span style="overflow:hidden;text-overflow:ellipsis">'+esc(x.d.name||'Untitled project')+'</span></button>'};
       return sp.ext.map(pb).join('')+(sp.int.length?'<div class="subsec">Internal</div>'+sp.int.map(pb).join(''):'')})()+'<button class="new" data-act="new" data-kind="projects">+ New project</button>'
     +'<div class="sec"><button class="secb" data-go="team">People</button></div>'+sorted('people').map(function(x){return '<button data-go="person" data-id="'+x.id+'"'+cur('person',x.id)+'>'+esc(x.d.name||'Unnamed')+'</button>'}).join('')+'<button class="new" data-act="new" data-kind="people">+ New person</button>'
@@ -2933,7 +3064,7 @@ function render(focusKey){
   if(!V[ui.v])ui.v='dash';
   view.innerHTML=mode==='loading'?'<p class="empty">Loading your workspace.</p>':backBar()+V[ui.v]();
   var hd=view.querySelector('.head');
-  if(hd){var hb=[].filter.call(hd.children,function(c){return c.matches('button.btn,label.btn')}),main=function(b){var t=b.dataset.act;return t==='topop'||t==='pdf'||t==='snap'||t==='newmeeting'||(t==='newrec'&&b.dataset.type==='scheck')};
+  if(hd){var hb=[].filter.call(hd.children,function(c){return c.matches('button.btn,label.btn')}),main=function(b){var t=b.dataset.act;return t==='kedit'||t==='topop'||t==='pdf'||t==='snap'||t==='newmeeting'||(t==='newrec'&&b.dataset.type==='scheck')};
     var rest=hb.filter(function(b){return !main(b)});if(narrow())rest=rest.filter(function(b){if(b.dataset.act==='edit'){b.remove();return false}return true});
     if(rest.length){var menu=true,wrapA=document.createElement('div');wrapA.className='acts'+(menu?' menu':'');hd.insertBefore(wrapA,rest[0]);rest.forEach(function(b){wrapA.appendChild(b)});
       var mb=document.createElement('button');mb.className='btn morebtn'+(menu?' menu':'');mb.dataset.act='more';mb.setAttribute('aria-expanded','false');mb.textContent='More';hd.insertBefore(mb,wrapA);
@@ -2949,8 +3080,8 @@ function render(focusKey){
 function showCurrent(){try{var c=rail.querySelector('[aria-current]');if(c&&rail.scrollWidth>rail.clientWidth)rail.scrollLeft=Math.max(0,c.offsetLeft-rail.clientWidth/2+c.offsetWidth/2)}catch(e){}}
 /* ---- going back: each page change is remembered, so Back (the button, the browser, or a phone's back gesture) returns to where you were ---- */
 var hist=[];
-var TOPN={dash:'Dashboard',inbox:'Inbox',actions:'Actions',week:'Week',gsched:'Schedule',sched:'Resourcing',records:'Documents',bd:'Business development',team:'Team',office:'Team',projects:'Projects',settings:'Settings',archive:'Archive',rtypes:'Document templates',people:'Team',month:'Week',search:'Search',reset:'Monday planning',dump:'Friday review'};
-function placeName(h){if(!h)return '';if(h.v==='project'){var pj=store.projects[h.id];return pj?(pj.name||'Untitled project'):''}if(h.v==='person'){var pe=store.people[h.id];return pe?(pe.name||'Unnamed'):''}
+var TOPN={know:'Knowledge',dash:'Dashboard',inbox:'Inbox',actions:'Actions',week:'Week',gsched:'Schedule',sched:'Resourcing',records:'Documents',bd:'Business development',team:'Team',office:'Team',projects:'Projects',settings:'Settings',archive:'Archive',rtypes:'Document templates',people:'Team',month:'Week',search:'Search',reset:'Monday planning',dump:'Friday review'};
+function placeName(h){if(!h)return '';if(h.v==='know'&&h.id)return kTitle(h.id);if(h.v==='project'){var pj=store.projects[h.id];return pj?(pj.name||'Untitled project'):''}if(h.v==='person'){var pe=store.people[h.id];return pe?(pe.name||'Unnamed'):''}
   if(h.v==='record'){var rc=store.records[h.id];return rc?(rc.title||formDef(rc.type).name):''}if(h.v==='today')return h.id?fmtD(h.id):'Today';if(h.v==='page'){var pg=pages('page').filter(function(x){return x.id===h.id})[0];return pg?(pg.name||'Page'):''}return TOPN[h.v]||''}
 function parentOf(){if(ui.v==='record'){var rc=store.records[ui.id];if(rc&&rc.project&&store.projects[rc.project])return {v:'project',id:rc.project,tab:'records'};if(rc&&rc.person&&store.people[rc.person])return {v:'person',id:rc.person};return {v:'records'}}
   if(ui.v==='person')return {v:'team'};if(ui.v==='today')return {v:'week'};return {v:'dash'}}
@@ -2992,13 +3123,14 @@ document.addEventListener('input',function(e){
   if(el.tagName==='TEXTAREA')grow(el);
   if(el.type==='date')el.classList.toggle('empty',!el.value);
   if(d.search&&d.k==='search2'){ui.q=el.value;render();return}
+  if(d.ks){ui.kq=el.value;render('ksearch');return}
   if(d.search){ui.q=el.value;if(ui.v!=='search'){ui.prev={v:ui.v,id:ui.id}}ui.v=ui.q.trim()?'search':(ui.prev?ui.prev.v:'dash');if(!ui.q.trim()&&ui.prev)ui.id=ui.prev.id;render();return}
   if(d.kdt){var kf2=el.form,pv2=kf2&&kf2.querySelector('.capprev');if(pv2)pv2.innerHTML=kdPreview(el.value,kf2.querySelector('[name="kp"]').value,kf2.querySelector('[name="kd"]').value);return}
   if(d.cap){var pv=el.form&&el.form.querySelector('.capprev');if(pv)pv.innerHTML=capPreview(el.value);return}
   if(d.ui){ui[d.ui]=el.value;return}
   if(d.tfi){(ui.tv[d.tfi]||(ui.tv[d.tfi]={})).f=el.value;render();return}
   if(d.tcf){var cq=d.tcf.split('|'),cci=cq.pop(),ctk=cq.join('|'),ctv=ui.tv[ctk]||(ui.tv[ctk]={});ctv.cf=ctv.cf||{};if(el.value)ctv.cf[cci]=el.value.slice(1);else delete ctv.cf[cci];render();return}
-  if(d.r){var r=d.r.split('|');if(!store[r[0]][r[1]])return;setp(store[r[0]][r[1]],r[2],cleanHtml(el.innerHTML));save(r[0],r[1]);return}
+  if(d.r){var r=d.r.split('|');if(!store[r[0]][r[1]])return;setp(store[r[0]][r[1]],r[2],cleanHtml(el.innerHTML));if(r[0]==='know'&&!store.know[r[1]].status)store.know[r[1]].status='draft';save(r[0],r[1]);return}
   if(d.b){var p=d.b.split('|');if(!store[p[0]][p[1]])return;setp(store[p[0]][p[1]],p[2],val(el));
     if(p[0]==='projects'&&p[2]==='ptype'){var npt=ptypes().filter(function(t){return t.id===el.value})[0];store.projects[p[1]].scope=npt&&npt.internal?'internal':'';needRender=true}
     if(p[0]==='records'&&p[2]==='project'){var rp=store.records[p[1]];if(rp.no&&rtConf(rp.type).num){var rn3=recNumber(rp.type,rp.project,p[1]);rp.no=rn3.no;rp.seq=rn3.seq;needRender=true}}save(p[0],p[1]);if(d.rr)needRender=true;return}
@@ -3014,6 +3146,13 @@ document.addEventListener('change',function(e){
     else{var was=sp.solo;delete sp.solo;save('projects',d.scope);ui.edit=sheetLid(sp);render();toast('Back on the shared layout',function(){sp.solo=was;save('projects',d.scope);ui.edit='solo:'+d.scope;render()})}return}
   if(d.richpic){var rq=d.richpic.split('|'),rdoc=store[rq[0]]&&store[rq[0]][rq[1]],rfs=[].slice.call(el.files||[]);el.value='';if(!rdoc||!rfs.length)return;toast('Adding '+(rfs.length===1?'the photo':rfs.length+' photos'));
     rfs.reduce(function(ch,f){return ch.then(function(){return richPic(f).then(function(r){setp(rdoc,rq[2],cleanHtml(get(rdoc,rq[2])||'')+'<div><img data-img="'+r.id+'"></div>');save(rq[0],rq[1]);render()})})},Promise.resolve()).catch(function(){toast('The photo could not be saved.')});return}
+  if(d.kimport){kImport(el);return}
+  if(d.kmove){var mv=kIndex().by[d.kmove];if(mv){mv.parent=el.value||'';var t0=ktree(),nn=t0.nodes.splice(mv._i,1)[0];t0.nodes.push(nn);if(el.value){kOpen[el.value]=1;kSaveOpen()}save('single','ktree');kIx=null;render();toast('Moved under '+(el.value?kLabel(el.value):'the top level'))}return}
+  if(d.krel){var rid2=kFind(el.value),me=d.krel;el.value='';if(!rid2){toast('Pick a page from the list.');return}if(rid2===me)return;var kr=single('krel');if(!Array.isArray(kr.pairs))kr.pairs=[];
+    if(kRel(me).indexOf(rid2)<0){kr.pairs.push([me,rid2]);save('single','krel');render();toast('Linked to '+kLabel(rid2))}return}
+  if(d.kfile){var ki=+d.kfile,kid=kFind(el.value),its=inboxItems(),kxi=its[ki];if(!kid||!kxi){if(!kid)toast('Pick a page from the list.');return}var kp=store.projects[kxi.p],kd=kDoc(kid);
+    kd.jobs=cleanHtml(kd.jobs||'')+'<div>'+esc(fmtL(today()))+' — '+(kp?esc(kp.name||'Project')+': ':'')+esc(kxi.t)+'</div>';if(!kd.status)kd.status='draft';save('know',kid);
+    its.splice(ki,1);save('single','inbox');ui.ibKnow=null;render();toast('Filed to '+kLabel(kid),function(){its.splice(Math.min(ki,its.length),0,kxi);save('single','inbox');render()});return}
   if(d.fadd){addFilesDb(d.fadd,[].slice.call(el.files||[]));el.value='';return}
   if(d.phadd){addPhotos(d.phadd,[].slice.call(el.files||[]));el.value='';return}
   if(d.l&&el.type==='checkbox'){var q0=d.l.split('|');if(q0[4]==='done'){var a0=get(store[q0[0]][q0[1]]||{},q0[2]),r0=a0&&a0[+q0[3]];if(r0){r0.doneOn=el.checked?today():'';save(q0[0],q0[1])}}}
@@ -3062,6 +3201,11 @@ document.addEventListener('mousedown',function(e){if(e.target.closest('[data-ric
 var lastInk=null;document.addEventListener('pointerdown',function(e){var cv=e.target.closest&&e.target.closest('canvas.ink');if(cv)lastInk=cv.dataset.ink;else if(!(e.target.closest&&e.target.closest('.inkbar')))lastInk=null},true);
 function pastePics(e){var fs=e.clipboardData?[].slice.call(e.clipboardData.files||[]).filter(function(f){return /^image\//.test(f.type)}):[];return fs}
 function richPic(file){return shrinkPhoto(file).then(function(pic){var id='im'+newId();IMG[id]=pic;return (root?root.collection('img').doc(id).set({d:pic.d,w:pic.w,h:pic.h}):Promise.resolve()).then(function(){return {id:id,pic:pic}})})}
+document.addEventListener('keydown',function(e){var b=e.target.closest&&e.target.closest('.ktree .klink');if(!b||!/^Arrow(Up|Down|Left|Right)$/.test(e.key))return;e.preventDefault();
+  var all=[].slice.call(document.querySelectorAll('.ktree .klink')),i=all.indexOf(b),row=b.closest('.krow'),car=row&&row.querySelector('button.kcar');
+  if(e.key==='ArrowDown'&&all[i+1])all[i+1].focus();else if(e.key==='ArrowUp'&&all[i-1])all[i-1].focus();
+  else if(car&&((e.key==='ArrowRight')!==(car.getAttribute('aria-expanded')==='true'))){var id0=b.dataset.id||car.dataset.id;if(kOpen[car.dataset.id])delete kOpen[car.dataset.id];else kOpen[car.dataset.id]=1;kSaveOpen();render();
+    var nb=[].slice.call(document.querySelectorAll('.ktree .klink')).filter(function(x){return x.dataset.id===id0})[0];if(nb)nb.focus()}});
 document.addEventListener('paste',function(e){var t=e.target;if(t.closest&&(t.closest('[data-r]')||t.closest('.regi')||t.closest('input,textarea,select')))return;if(!lastInk)return;var fs=pastePics(e);if(!fs.length)return;e.preventDefault();
   var q=lastInk.split('|'),doc=store[q[0]]&&store[q[0]][q[1]],rp=q[2].replace(/_ink$/,'');if(!doc||rp===q[2])return;toast('Adding the screenshot to the typed notes above the handwriting');
   fs.reduce(function(ch,f){return ch.then(function(){return richPic(f).then(function(r){setp(doc,rp,cleanHtml(get(doc,rp)||'')+'<div><img data-img="'+r.id+'"></div>');save(q[0],q[1]);render()})})},Promise.resolve()).catch(function(){toast('The screenshot could not be saved.')})});
@@ -3220,7 +3364,7 @@ document.addEventListener('click',function(e){
   if(x.id==='lb'){x.classList.remove('on');return}
   var mv=x.closest('[data-move]');if(mv){var m=mv.dataset.move.split('|');reorder(m[0],m[1],m[2]);return}
   var g=x.closest('[data-go]'),t=x.closest('[data-tab]'),a=x.closest('[data-act]');
-  var keep=a&&/^(del|rmcheck|rmtpl|rmpage|layreset)$/.test(a.dataset.act);
+  var keep=a&&/^(del|rmcheck|rmtpl|rmpage|layreset|kdel)$/.test(a.dataset.act);
   if(ui.confirm&&!keep){ui.confirm=null;if(!g&&!t&&!a&&!x.closest('label'))return schedule()}
   if(g){if(g.dataset.go!=='search')ui.q='';go(g.dataset.go,g.dataset.id,g.dataset.gotab);return}
   if(t){ui.tab=t.dataset.tab;ui.edit=null;remember();render();return}
@@ -3280,6 +3424,24 @@ document.addEventListener('click',function(e){
   if(act==='popshow'){openPop(a.dataset.id);return}
   if(act==='popclose'){var pc=a.dataset.id||ui.pop;if(pc===ui.pop)ui.pop=null;ui.mins=ui.mins.filter(function(x){return x!==pc});render();return}
   if(act==='popfull'){var pf=a.dataset.id||ui.pop;if(pf===ui.pop)ui.pop=null;ui.mins=ui.mins.filter(function(x){return x!==pf});popFull=true;go('record',pf);return}
+  if(act==='ktog'){var tid=a.dataset.id;if(kOpen[tid])delete kOpen[tid];else kOpen[tid]=1;kSaveOpen();render();return}
+  if(act==='kexpand'){kOpen={};kSaveOpen();render();return}
+  if(act==='kedit'){ui.kedit=ui.kedit===ui.id?null:ui.id;render();return}
+  if(act==='kaddtop'){ui.kq='';var nt=kAdd('',null,'New section');go('know',nt);ui.kedit=nt;render('ktitle');return}
+  if(act==='kaddsub'||act==='kaddnext'){ui.kq='';var kb=kIndex().by[a.dataset.id];if(!kb)return;var nk=act==='kaddsub'?kAdd(a.dataset.id,null):kAdd(kb.parent||'',a.dataset.id);go('know',nk);ui.kedit=nk;render('ktitle');return}
+  if(act==='kmv'){var km=kIndex(),kn=km.by[a.dataset.id];if(!kn)return;var sib=km.kids[kn.parent&&km.by[kn.parent]?kn.parent:'']||[],si=sib.indexOf(kn.id),sw=sib[si+(+a.dataset.d)];if(!sw)return;
+    var T=ktree().nodes,blk=function(id0){var ids=[id0].concat(km.order.filter(function(o){return kAnc(o).indexOf(id0)>=0}));return ids.map(function(o){return km.by[o]})};
+    var A=blk(+a.dataset.d<0?sw:kn.id),B=blk(+a.dataset.d<0?kn.id:sw),start=Math.min.apply(null,A.concat(B).map(function(o){return o._i}));
+    var rest=T.filter(function(o){return A.indexOf(o)<0&&B.indexOf(o)<0});T.length=0;rest.slice(0,start).forEach(function(o){T.push(o)});B.forEach(function(o){T.push(o)});A.forEach(function(o){T.push(o)});rest.slice(start).forEach(function(o){T.push(o)});
+    save('single','ktree');kIx=null;render();return}
+  if(act==='kdel'){var did=a.dataset.id,kd2=kIndex(),dn=kd2.by[did];if(dn&&kd2.kids[did]&&kd2.kids[did].length){toast('Move or delete the pages under it first.');return}
+    if(ui.confirm!=='kdel'){ui.confirm='kdel';render();return}ui.confirm=null;var T2=ktree().nodes,at2=dn?dn._i:-1,gone2=dn?T2.splice(at2,1)[0]:null,doc2=store.know[did]?clone(store.know[did]):null,prs=single('krel').pairs||[],relGone=prs.filter(function(pq){return pq[0]===did||pq[1]===did});
+    single('krel').pairs=prs.filter(function(pq){return relGone.indexOf(pq)<0});save('single','krel');if(gone2)save('single','ktree');if(doc2)remove('know',did);kIx=null;var back=dn&&dn.parent?dn.parent:null;go('know',back);
+    toast('Deleted '+(gone2?gone2.title||'the page':'the page'),function(){if(gone2){ktree().nodes.splice(Math.min(at2,ktree().nodes.length),0,gone2);save('single','ktree')}if(doc2)put('know',did,doc2);single('krel').pairs=(single('krel').pairs||[]).concat(relGone);save('single','krel');kIx=null;go('know',did)});return}
+  if(act==='kadopt'){var ad=a.dataset.id;ktree().nodes.push({id:ad,parent:'',title:(store.know[ad]||{}).summary||'Recovered page',desc:''});save('single','ktree');kIx=null;render();toast('Added at the end of the tree. Use Arrange to move it.');return}
+  if(act==='krelx'){var kr2=single('krel');kr2.pairs=(kr2.pairs||[]).filter(function(pq){return !((pq[0]===a.dataset.a&&pq[1]===a.dataset.b)||(pq[1]===a.dataset.a&&pq[0]===a.dataset.b))});save('single','krel');render();return}
+  if(act==='kfilex'){ui.ibKnow=null;render();return}
+  if(act==='ktreedl'){download('Knowledge tree '+today()+'.md',new Blob([kToMd()],{type:'text/markdown'}));return}
   if(act==='mine'){var mk=a.dataset.key.split('|'),marr=store[mk[0]][mk[1]]&&get(store[mk[0]][mk[1]],mk[2]),mrow=marr&&marr[+mk[3]];if(mrow){if(a.dataset.v==='1')mrow.mine=true;else delete mrow.mine;save(mk[0],mk[1]);toast(a.dataset.v==='1'?'Now with your actions':'Moved to other people\u2019s actions');render()}return}
   if(act==='rtopt'){ui.rtOpen=ui.rtOpen===a.dataset.t?null:a.dataset.t;render();return}
   if(act==='recnum'){var rn=store.records[a.dataset.id];if(rn){var nn2=recNumber(rn.type,rn.project,a.dataset.id);rn.no=nn2.no;rn.seq=nn2.seq;save('records',a.dataset.id);render()}return}
