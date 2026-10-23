@@ -2359,7 +2359,7 @@ V.know=function(){var x=kIndex(),id=ui.id&&(x.by[ui.id]||store.know[ui.id])?ui.i
   if(!x.order.length&&!x.orph.length)return '<div class="head"><h1>Knowledge</h1></div><div class="g">'+box('Load your body of knowledge','<div class="eline"><label class="btn pri" style="cursor:pointer">Choose the tree file<input class="file" type="file" accept=".md,.txt,.json,text/markdown,application/json" data-kimport="1"></label></div>'
     +'<p class="meta" style="padding:0 12px 12px">A Markdown outline where each line starts with its number (## 1 Mechanical engineering, ### 1.1 Design basis, - **1.1.1 Design criteria** — description) or a JSON file with a nodes list. It is saved to your own account, not to the website. Or start from scratch: <button class="link" data-act="kaddtop">add a first section</button>.</p>')+'</div>';
   var tree='<div class="ktree nop"><input type="search" class="ein ksearch" data-ks="1" data-k="ksearch" value="'+esc(ui.kq||'')+'" placeholder="Filter the tree" aria-label="Filter the tree"><div class="krows" role="tree">'+kRows()+'</div>'
-    +'<div class="eline"><button class="mini" data-act="kaddtop">+ Section</button><span class="sp"></span><button class="mini" data-act="kexpand" data-v="0">Collapse all</button></div></div>';
+    +'<div class="eline"><button class="mini" data-act="kaddtop">+ Section</button><span class="sp"></span><button class="mini" data-act="kexpand" data-v="1">Expand all</button><button class="mini" data-act="kexpand" data-v="0">Collapse all</button></div></div>';
   var main=id?kPage(id):'<div class="head"><h1>'+esc(ktree().name||'Knowledge')+'</h1><span class="sp"></span>'+pdfBtn+'</div><p class="meta">'+x.pages.length+' pages in '+(x.kids['']||[]).length+' sections. Pick a page on the left, or filter by a word.</p>'
     +'<div class="g">'+box('Sections','<ul class="list">'+(x.kids['']||[]).map(function(s0){return '<li><button class="link" data-go="know" data-id="'+esc(s0)+'">'+esc(kLabel(s0))+'</button></li>'}).join('')+'</ul>','','','','kn:secs')+'</div>';
   return '<div class="kwrap'+(id?' has-page':'')+'">'+tree+'<div class="kmain">'+main+'</div></div>'+kList()};
@@ -3426,7 +3426,7 @@ document.addEventListener('click',function(e){
   if(act==='popclose'){var pc=a.dataset.id||ui.pop;if(pc===ui.pop)ui.pop=null;ui.mins=ui.mins.filter(function(x){return x!==pc});render();return}
   if(act==='popfull'){var pf=a.dataset.id||ui.pop;if(pf===ui.pop)ui.pop=null;ui.mins=ui.mins.filter(function(x){return x!==pf});popFull=true;go('record',pf);return}
   if(act==='ktog'){var tid=a.dataset.id;if(kOpen[tid])delete kOpen[tid];else kOpen[tid]=1;kSaveOpen();render();return}
-  if(act==='kexpand'){kOpen={};kSaveOpen();render();return}
+  if(act==='kexpand'){kOpen={};if(a.dataset.v==='1'){var kx3=kIndex();Object.keys(kx3.kids).forEach(function(g){if(g)kOpen[g]=1})}kSaveOpen();render();return}
   if(act==='kedit'){ui.kedit=ui.kedit===ui.id?null:ui.id;render();return}
   if(act==='kaddtop'){ui.kq='';var nt=kAdd('',null,'New section');go('know',nt);ui.kedit=nt;render('ktitle');return}
   if(act==='kaddsub'||act==='kaddnext'){ui.kq='';var kb=kIndex().by[a.dataset.id];if(!kb)return;var nk=act==='kaddsub'?kAdd(a.dataset.id,null):kAdd(kb.parent||'',a.dataset.id);go('know',nk);ui.kedit=nk;render('ktitle');return}
